@@ -4,7 +4,7 @@
 	"version": "1.0.0",
 	"minAppVersion": "1.1.0",
 	"description": "Expand and shrink the selection step by step: word, text in quotes or formatting, sentence, list item, section. Jump to the next sentence, quote or list item.",
-	"author": "alpakadev",
+	"author": "Melik Alp Özçelik",
 	"authorUrl": "https://github.com/alpakadev",
 	"isDesktopOnly": false
 }

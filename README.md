@@ -60,13 +60,13 @@ Links and embeds work the same way: in `![[Rising status invites strategic decep
  ↑↓ size   ←→ jump   space marks
 ```
 
-The highlighted row is selected in the note right away, so you see exactly what you get. Previewing never moves the page.
+The highlighted row is selected in the note right away and drawn clearly, with its cursor, even though the list has the keyboard focus — so you see exactly what you get. Previewing never moves the page.
 
 - <kbd>↑</kbd> smaller, <kbd>↓</kbd> larger — or move the mouse over a row.
 - <kbd>←</kbd> previous, <kbd>→</kbd> next: the same thing elsewhere — the next sentence, the next bold or quoted text, the next line. The other rows stay as they are; the highlighted row shows the jumped text and how far away it is (`+1`, `−2`). The note scrolls only if the target is hidden, and going back restores the view exactly. The ‹ › buttons on the row do the same.
 - <kbd>Space</kbd> or the chip on the row: with or without marks, for all rows at once — the sentence with or without its final `.`, bold text with or without `**`, the line or list item with or without `- `, a heading with or without `##`.
 - <kbd>Enter</kbd> or a click: keep it. <kbd>1</kbd>–<kbd>9</kbd> keep that row. **Reduce selection** afterwards walks down the finer steps inside it.
-- <kbd>Esc</kbd>, or switching to something else: put the selection and the view back.
+- <kbd>Esc</kbd>, a click into the note, or switching to something else: leave without choosing. The selection and the view go back to how they were before you opened the list.
 - **Line** is the whole current line. It is only there while the selection stays on one line. A list item, heading or one-line paragraph that is exactly the line is shown as Line.
 - While the list is open, the hotkeys of **Expand selection** / **Reduce selection** move up and down, and **Select same kind: next** / **previous** jump.
 - On touch screens: tap a row to preview it, tap it again to keep it.

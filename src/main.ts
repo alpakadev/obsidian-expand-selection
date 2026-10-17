@@ -2,6 +2,7 @@ import { Plugin } from 'obsidian';
 import { registerCommands } from './commands';
 import type { SelectionOptions } from './core/types';
 import { SelectionController } from './editor/controller';
+import { previewExtension } from './editor/preview-mark';
 import { SelectionStatus } from './editor/status';
 import { SelectionPicker } from './ui/picker';
 import { SmartSelectSettingTab } from './settings';
@@ -13,6 +14,7 @@ export default class SmartSelectPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		this.registerEditorExtension(previewExtension);
 		const status = new SelectionStatus(this, () => this.settings.showStatus);
 		const controller = new SelectionController(() => this.options, status, new SelectionPicker());
 		this.register(() => controller.closePicker());

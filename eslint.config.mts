@@ -7,6 +7,8 @@ export default defineConfig(
 		'node_modules',
 		'dist',
 		'esbuild.config.mjs',
+		'scripts',
+		'.test-build',
 		'version-bump.mjs',
 		'versions.json',
 		'main.js',
@@ -29,4 +31,12 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		// Unit tests run in Node, not in Obsidian.
+		files: ['tests/**/*.ts'],
+		rules: {
+			'@typescript-eslint/no-floating-promises': 'off',
+			'obsidianmd/no-nodejs-modules': 'off',
+		},
+	},
 );

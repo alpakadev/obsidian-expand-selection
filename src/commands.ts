@@ -1,0 +1,59 @@
+import type { Editor, Plugin } from 'obsidian';
+import type { SelectionController } from './editor/controller';
+
+interface CommandSpec {
+	id: string;
+	name: string;
+	icon: string;
+	run: (editor: Editor) => void;
+}
+
+/** Registers the editor commands. No default hotkeys: assign them in Settings → Hotkeys. */
+export function registerCommands(plugin: Plugin, controller: SelectionController): void {
+	const commands: CommandSpec[] = [
+		{
+			id: 'expand-selection',
+			name: 'Expand selection',
+			icon: 'expand',
+			run: (editor) => controller.expand(editor),
+		},
+		{
+			id: 'shrink-selection',
+			name: 'Shrink selection',
+			icon: 'shrink',
+			run: (editor) => controller.shrink(editor),
+		},
+		{
+			id: 'select-next-unit',
+			name: 'Select next of the same kind',
+			icon: 'arrow-right',
+			run: (editor) => controller.selectSibling(editor, 1),
+		},
+		{
+			id: 'select-previous-unit',
+			name: 'Select previous of the same kind',
+			icon: 'arrow-left',
+			run: (editor) => controller.selectSibling(editor, -1),
+		},
+		{
+			id: 'select-next-enclosed',
+			name: 'Select next text in quotes, brackets or formatting',
+			icon: 'chevron-right',
+			run: (editor) => controller.selectEnclosed(editor, 1),
+		},
+		{
+			id: 'select-previous-enclosed',
+			name: 'Select previous text in quotes, brackets or formatting',
+			icon: 'chevron-left',
+			run: (editor) => controller.selectEnclosed(editor, -1),
+		},
+	];
+	for (const command of commands) {
+		plugin.addCommand({
+			id: command.id,
+			name: command.name,
+			icon: command.icon,
+			editorCallback: (editor) => command.run(editor),
+		});
+	}
+}

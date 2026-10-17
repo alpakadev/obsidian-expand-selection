@@ -1,5 +1,24 @@
 # Obsidian community plugin
 
+## This plugin: Smart Select
+
+Commands that expand, shrink and move the editor selection by Markdown-aware units (word → text in quotes/formatting → sentence → list item → list → section → note). See `README.md` for the user-facing behavior.
+
+- `src/core/` — the selection engine. Plain TypeScript, **no `obsidian` imports**, so it runs in Node tests.
+    - `lines.ts` parses each line (quote prefix, indentation, list marker, heading, fence). `lists.ts` builds the list tree. `structure.ts` groups lines into text blocks and returns the block-level units around a line (list items, quotes, code blocks, tables, sections, note).
+    - `pairs.ts` matches quotes, brackets and Markdown formatting; `inline.ts` finds words, sentences, clauses and pair units inside one text block.
+    - `analysis.ts` combines both into `stepsAround(range)`: every unit containing a range, smallest first, deduplicated by `KIND_PRIORITY` in `types.ts`.
+    - `operations.ts` implements the commands: expand, shrink, next/previous of the same kind, next/previous enclosed text.
+- `src/editor/` — the Obsidian side: `controller.ts` applies operations to every cursor, `history.ts` remembers expansion steps for shrinking, `status.ts` shows the unit name in the status bar.
+- `src/commands.ts` registers the commands, `src/settings.ts` holds settings and the settings tab.
+
+Rules for this codebase:
+
+- Command IDs (`expand-selection`, `shrink-selection`, `select-next-unit`, `select-previous-unit`, `select-next-enclosed`, `select-previous-enclosed`) are stable API. Don't rename them. Don't add default hotkeys.
+- Don't use regex lookbehind (`(?<=`, `(?<!`): it is a syntax error on iOS before 16.4 and would break the plugin on mobile. The linter checks this.
+- Add a test in `tests/` for every behavior change. `npm test` bundles `tests/*.test.ts` with esbuild and runs them with `node --test`; `tests/helpers.ts` marks the cursor with `¦` and a selection with `«…»`.
+- Before committing, run `npm run build`, `npm run lint` and `npm test`.
+
 ## Project overview
 
 - Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
@@ -37,7 +56,7 @@ npm run build
 
 - ESLint is preconfigured with `eslint-plugin-obsidianmd` for Obsidian-specific rules.
 - Run `npm run lint` to lint the project.
-- A GitHub Action automatically lints every commit on all branches.
+- A GitHub Action automatically builds, tests (`npm test`) and lints every commit on all branches.
 
 ## File & folder conventions
 

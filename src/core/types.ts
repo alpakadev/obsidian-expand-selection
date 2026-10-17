@@ -1,4 +1,4 @@
-import { DEFAULT_ABBREVIATIONS, abbreviationSet } from './abbreviations';
+import { abbreviationSet, defaultAbbreviationLists } from './abbreviations';
 
 /** A half-open range of document offsets. */
 export interface Range {
@@ -119,7 +119,7 @@ export const DEFAULT_OPTIONS: SelectionOptions = {
 	sentenceWithoutPunctuation: true,
 	lines: true,
 	sections: true,
-	abbreviations: abbreviationSet(DEFAULT_ABBREVIATIONS),
+	abbreviations: abbreviationSet(defaultAbbreviationLists()),
 };
 
 export function rangeLength(range: Range): number {

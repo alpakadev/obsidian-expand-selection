@@ -47,14 +47,17 @@ export class SmartSelectSettingTab extends PluginSettingTab {
 		);
 		this.toggle('sections', 'Heading sections', 'Select the section under each heading before the whole note.');
 
-		const count = this.plugin.settings.abbreviations.length;
+		const inUse = this.plugin.settings.abbreviations
+			.filter((list) => list.enabled)
+			.map((list) => `${list.language} (${list.words.length})`)
+			.join(', ');
 		new Setting(containerEl)
 			.setName('Abbreviations')
-			.setDesc(`A period after these doesn’t end a sentence, like “e.g.” or “z.B.” (${count} words).`)
+			.setDesc(`A period after these does not end a sentence, like “e.g.” or “z.B.”. In use: ${inUse || 'none'}.`)
 			.addButton((button) =>
 				button.setButtonText('Edit').onClick(() => {
-					new AbbreviationsModal(this.app, this.plugin.settings.abbreviations, async (words) => {
-						this.plugin.settings.abbreviations = words;
+					new AbbreviationsModal(this.app, this.plugin.settings.abbreviations, async (lists) => {
+						this.plugin.settings.abbreviations = lists;
 						await this.plugin.saveSettings();
 						this.display();
 					}).open();

@@ -1,92 +1,16 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { Editor, EditorPosition, EditorRange, EditorSelectionOrCaret } from 'obsidian';
-import { SelectionController, SelectionFeedback } from '../src/editor/controller';
+import type { Editor } from 'obsidian';
+import { SelectionController } from '../src/editor/controller';
 import { DEFAULT_OPTIONS } from '../src/core/types';
-
-interface OffsetSelection {
-	anchor: number;
-	head: number;
-}
-
-/** The parts of Obsidian's Editor the controller uses, backed by a string. */
-class FakeEditor {
-	selections: OffsetSelection[];
-	main = 0;
-	scrolledTo: EditorRange | null = null;
-
-	constructor(
-		readonly text: string,
-		...selections: OffsetSelection[]
-	) {
-		this.selections = selections;
-	}
-
-	getValue(): string {
-		return this.text;
-	}
-
-	posToOffset(pos: EditorPosition): number {
-		const lines = this.text.split('\n');
-		let offset = 0;
-		for (let i = 0; i < pos.line; i++) offset += lines[i]!.length + 1;
-		return offset + pos.ch;
-	}
-
-	offsetToPos(offset: number): EditorPosition {
-		const before = this.text.slice(0, offset).split('\n');
-		return { line: before.length - 1, ch: before[before.length - 1]!.length };
-	}
-
-	listSelections() {
-		return this.selections.map((s) => ({
-			anchor: this.offsetToPos(s.anchor),
-			head: this.offsetToPos(s.head),
-		}));
-	}
-
-	setSelections(ranges: EditorSelectionOrCaret[], main?: number): void {
-		this.selections = ranges.map((r) => ({
-			anchor: this.posToOffset(r.anchor),
-			head: this.posToOffset(r.head ?? r.anchor),
-		}));
-		this.main = main ?? 0;
-	}
-
-	getCursor(): EditorPosition {
-		return this.offsetToPos(this.selections[this.main]!.head);
-	}
-
-	scrollIntoView(range: EditorRange): void {
-		this.scrolledTo = range;
-	}
-
-	selected(): string[] {
-		return this.selections.map((s) =>
-			this.text.slice(Math.min(s.anchor, s.head), Math.max(s.anchor, s.head)),
-		);
-	}
-}
-
-class FakeFeedback implements SelectionFeedback {
-	shown: string | null = null;
-	show(text: string): void {
-		this.shown = text;
-	}
-	clear(): void {
-		this.shown = null;
-	}
-	quietly(change: () => void): void {
-		change();
-	}
-}
+import { FakeEditor, FakeFeedback, FakePicker, OffsetSelection } from './fake-editor';
 
 const TEXT = 'Intro.\n\n- **Bold sentence here.** Second sentence.\n- Next item\n';
 
 function setup(...selections: OffsetSelection[]) {
 	const editor = new FakeEditor(TEXT, ...selections);
 	const feedback = new FakeFeedback();
-	const controller = new SelectionController(() => DEFAULT_OPTIONS, feedback);
+	const controller = new SelectionController(() => DEFAULT_OPTIONS, feedback, new FakePicker());
 	return { editor, feedback, controller, asEditor: editor as unknown as Editor };
 }
 
@@ -162,6 +86,15 @@ describe('selection controller', () => {
 		controller.selectSibling(changed as unknown as Editor, 1);
 		// Without the remembered kind, the bold sentence counts as bold text: no more of it follows.
 		assert.deepEqual(changed.selected(), ['Bold sentence here.']);
+	});
+
+	it('keeps the view where it is when expanding', () => {
+		const { editor, controller, asEditor } = setup(cursor(TEXT.indexOf('Intro') + 1));
+		editor.scrollTop = 40;
+		controller.expand(asEditor);
+		controller.expand(asEditor);
+		assert.equal(editor.scrollTop, 40);
+		assert.equal(editor.scrolledTo, null);
 	});
 
 	it('reports when there is nothing to do', () => {

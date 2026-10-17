@@ -56,13 +56,18 @@ export class Analysis {
 
 	/** Expansion steps that contain `range`, smallest first, one unit per distinct range. */
 	stepsAround(range: Range): Unit[] {
+		return dedupe(this.unitsAround(range));
+	}
+
+	/** Every expansion step unit that contains `range`, including units that cover the same text. */
+	unitsAround(range: Range): Unit[] {
 		const structure = this.structure;
 		const lineIndex = structure.lineAt(range.from);
 		const units: Unit[] = [];
 		const block = structure.blockAt(lineIndex);
 		if (block) units.push(...this.inlineUnits(block));
 		units.push(...structure.containers(lineIndex));
-		return dedupe(units.filter((unit) => this.isStep(unit) && containsRange(unit, range)));
+		return units.filter((unit) => this.isStep(unit) && containsRange(unit, range));
 	}
 
 	/** Moves an empty cursor that sits in a line prefix or trailing whitespace onto the text. */

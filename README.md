@@ -36,66 +36,70 @@ With the cursor in *right* inside `*“this is not right for me”*`:
 
 Links and embeds work the same way: in `![[Rising status invites strategic deception]]` the steps are the word, the link text, `[[…]]`, then `![[…]]`. In `[Link name](https://…)` they are the word, `Link name`, then the whole link — or, from inside the URL, the URL, then the whole link.
 
-**Shrink selection** walks the same steps back. It also works on a selection you made with the mouse: it selects the largest step inside it, on the side where the cursor is.
+**Reduce selection** walks the same steps back. It also works on a selection you made with the mouse: it selects the largest step inside it, on the side where the cursor is.
 
-**Select next of the same kind** moves the selection along and keeps both the kind and the size you chose:
+**Select same kind: next** moves the selection along and keeps both the kind and the size you chose:
 
 - a word → the next word; a sentence → the next sentence, also into the next bullet; a list item → the next list item;
 - bold text or text in quotes **without** its marks → the next bold, italic, quoted or bracketed text, again without marks. `Moral intellectualizing often masks shame.` → `Investigating family narratives reveals inherited life scripts.` → `patterns across generations`;
 - the same **with** its marks → the next one with its marks: `**Moral …**` → `**Investigating …**` → `"patterns across generations"`.
 
-**Select next text in quotes, brackets or formatting** jumps from anywhere straight into the next `“…”`, `(…)`, `**…**`, `` `…` ``, `[[…]]` or link text — with the cursor on *Reframing* in the example, one press selects `this is not right for me`.
+**Select text in quotes, brackets or formatting: next** jumps from anywhere straight into the next `“…”`, `(…)`, `**…**`, `` `…` ``, `[[…]]` or link text — with the cursor on *Reframing* in the example, one press selects `this is not right for me`.
 
 ## Choose what to select
 
-**Choose what to select** opens a small list right below the cursor with every step, from the word to the whole note, and a preview of each:
+**Choose what to select** opens a small list right below the cursor: one row for each thing around it, with a preview.
 
 ```
- 1  Word                                intellectualizing
- 2  Sentence without final punctuation  Moral intellectualizing often masks shame
- 3  Inside **…**                        Moral intellectualizing often masks shame.
- 4  Including **…**                     **Moral intellectualizing often masks shame.**
- 5  List item text                      **Moral intellectualizing … stems from fear.
- 6  List item                           - **Moral intellectualizing … stems from fear.
- …
- ↑↓ size   ←→ move   ↵ select   esc cancel
+ Word        intellectualizing
+ Sentence    Moral intellectualizing often masks shame.
+ Bold        **Moral intellectualizing often masks shame.**    [**…**]  ‹ +1 ›
+ Line        - **Moral intellectualizing … stems from fear.
+ List        - **Moral intellectualizing… · 3 lines
+ Whole note  Notes on shame. · 5 lines
+ ↑↓ size   ←→ jump   space marks
 ```
 
-The highlighted step is selected in the note right away, so you see exactly what you will get.
+The highlighted row is selected in the note right away, so you see exactly what you get. Previewing never moves the page.
 
-- <kbd>↑</kbd> <kbd>↓</kbd> or the mouse: bigger or smaller.
-- <kbd>←</kbd> <kbd>→</kbd>: the previous or next one of the same kind and size — the next sentence, the next bold text, the next list item.
-- <kbd>Enter</kbd>, a click, or a number key <kbd>1</kbd>–<kbd>9</kbd>: keep it. **Shrink selection** afterwards steps down the same list.
-- <kbd>Esc</kbd> or a click elsewhere: put the selection back as it was.
-- Pressing the hotkey of **Choose what to select**, **Expand selection** or **Shrink selection** while the list is open moves the highlight.
+- <kbd>↑</kbd> smaller, <kbd>↓</kbd> larger — or move the mouse over a row.
+- <kbd>←</kbd> previous, <kbd>→</kbd> next: the same thing elsewhere — the next sentence, the next bold or quoted text, the next line. The other rows stay as they are; the highlighted row shows the jumped text and how far away it is (`+1`, `−2`). The note scrolls only if the target is hidden, and going back restores the view exactly. The ‹ › buttons on the row do the same.
+- <kbd>Space</kbd> or the chip on the row: with or without marks, for all rows at once — the sentence with or without its final `.`, bold text with or without `**`, the line or list item with or without `- `, a heading with or without `##`.
+- <kbd>Enter</kbd> or a click: keep it. <kbd>1</kbd>–<kbd>9</kbd> keep that row. **Reduce selection** afterwards walks down the finer steps inside it.
+- <kbd>Esc</kbd>, or switching to something else: put the selection and the view back.
+- **Line** is the whole current line. It is only there while the selection stays on one line. A list item, heading or one-line paragraph that is exactly the line is shown as Line.
+- While the list is open, the hotkeys of **Expand selection** / **Reduce selection** move up and down, and **Select same kind: next** / **previous** jump.
+- On touch screens: tap a row to preview it, tap it again to keep it.
+
+The status bar names the exact step, like “Sentence without final punctuation” or “Inside \*\*…\*\*”.
 
 ## Commands
 
 | Command                                                   | What it does                                                                                                               |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Choose what to select**                                 | A list below the cursor with one row per thing around it — word, sentence, bold, line, list, note — previewed live. ↑↓ size, ←→ jump, Space marks. |
 | **Expand selection**                                      | Selects the next larger unit around the selection.                                                                         |
-| **Shrink selection**                                      | Goes back one expansion step. After a selection made by hand, selects the largest unit inside it.                          |
-| **Choose what to select**                                 | Shows all steps around the cursor in a list to pick from, with a live preview.                                             |
-| **Select next of the same kind**                          | Selects the next word, sentence, quote, list item, section … — whatever kind the current selection is, with or without marks as before. Without a selection, selects the next word. |
-| **Select previous of the same kind**                      | The same, backwards.                                                                                                       |
-| **Select next text in quotes, brackets or formatting**    | Selects the text inside the next pair of quotes, brackets or formatting marks. Nested pairs like `*“…”*` select the innermost text; expand from there to include the marks. |
-| **Select previous text in quotes, brackets or formatting** | The same, backwards.                                                                                                       |
+| **Reduce selection**                                      | Goes back one expansion step. After a selection made by hand, selects the largest unit inside it.                          |
+| **Select same kind: next**                                | Selects the next word, sentence, quote, list item, section … — whatever kind the current selection is, with or without marks as before. Without a selection, selects the next word. |
+| **Select same kind: previous**                            | The same, backwards.                                                                                                       |
+| **Select text in quotes, brackets or formatting: next**   | Selects the text inside the next pair of quotes, brackets or formatting marks. Nested pairs like `*“…”*` select the innermost text; expand from there to include the marks. |
+| **Select text in quotes, brackets or formatting: previous** | The same, backwards.                                                                                                       |
 
 All commands work with multiple cursors and keep the direction of a backward selection.
 
 ## Set up hotkeys
 
-The plugin does not set any hotkeys. Open **Settings → Hotkeys**, search for **Smart Select** and assign your own. Suggestions, similar to VS Code's smart select (`.` and `,` are single keys on German and US keyboards alike):
+The plugin does not set any hotkeys. Open **Settings → Hotkeys**, search for **Smart Select** and assign your own. The commands are named so that Obsidian's alphabetical list keeps opposites together: Expand next to Reduce, next above previous. Suggestions, similar to VS Code's smart select (`.` and `,` are single keys on German and US keyboards alike):
 
 | Command                                    | Windows / Linux        | macOS                       |
 | ------------------------------------------ | ---------------------- | --------------------------- |
-| Expand selection                           | <kbd>Alt+Shift+→</kbd> | <kbd>Ctrl+Shift+Cmd+→</kbd> |
-| Shrink selection                           | <kbd>Alt+Shift+←</kbd> | <kbd>Ctrl+Shift+Cmd+←</kbd> |
 | Choose what to select                      | <kbd>Alt+Shift+S</kbd> | <kbd>Ctrl+Shift+Cmd+S</kbd> |
-| Select next of the same kind               | <kbd>Alt+Shift+↓</kbd> | <kbd>Ctrl+Shift+Cmd+↓</kbd> |
-| Select previous of the same kind           | <kbd>Alt+Shift+↑</kbd> | <kbd>Ctrl+Shift+Cmd+↑</kbd> |
-| Select next text in quotes, brackets …     | <kbd>Alt+Shift+.</kbd> | <kbd>Ctrl+Shift+Cmd+.</kbd> |
-| Select previous text in quotes, brackets … | <kbd>Alt+Shift+,</kbd> | <kbd>Ctrl+Shift+Cmd+,</kbd> |
+| Expand selection                           | <kbd>Alt+Shift+→</kbd> | <kbd>Ctrl+Shift+Cmd+→</kbd> |
+| Reduce selection                           | <kbd>Alt+Shift+←</kbd> | <kbd>Ctrl+Shift+Cmd+←</kbd> |
+| Select same kind: next                     | <kbd>Alt+Shift+↓</kbd> | <kbd>Ctrl+Shift+Cmd+↓</kbd> |
+| Select same kind: previous                 | <kbd>Alt+Shift+↑</kbd> | <kbd>Ctrl+Shift+Cmd+↑</kbd> |
+| Select text in quotes, …: next             | <kbd>Alt+Shift+.</kbd> | <kbd>Ctrl+Shift+Cmd+.</kbd> |
+| Select text in quotes, …: previous         | <kbd>Alt+Shift+,</kbd> | <kbd>Ctrl+Shift+Cmd+,</kbd> |
 
 Obsidian marks hotkeys that are already taken in red. On mobile, add the commands to the toolbar under **Settings → Toolbar**.
 
@@ -120,7 +124,7 @@ From small to large — steps that would select the same text are skipped:
 ## Settings
 
 - **Expansion steps**: turn off steps you don't want to stop at — compound words, parts of sentences, sentences without final punctuation, lines, heading sections.
-- **Abbreviations**: words ending with a period that don't end a sentence. **Edit** opens a list where you add or remove them; **Restore defaults** brings back the built-in English and German ones.
+- **Abbreviations**: words ending with a period that don't end a sentence, one list per language. **Edit** opens them: pick a language, add words (it tells you when a word is already there), remove a word with its ×, turn a language off, or **Add a language** of your own. English and German come filled in; **Restore** adds back built-in words you removed and keeps your own words, languages and on/off choices. Removing a word that another language you use still has tells you so.
 - **Show what is selected**: show the name of the selected unit in the status bar (desktop).
 
 ## Install
@@ -150,7 +154,7 @@ The selection logic in `src/core/` is plain TypeScript without Obsidian imports,
 The behavior follows what people know from other editors:
 
 - Each press grows the selection by one meaningful unit, inside before outside — like Word's <kbd>F8</kbd> (word, sentence, paragraph, document), JetBrains' Extend Selection, VS Code's smart select and Emacs' expand-region (inside quotes, then the quotes).
-- Shrinking retraces the exact steps back, like <kbd>Shift+F8</kbd> in Word or Shrink Selection in JetBrains.
+- Reducing retraces the exact steps back, like <kbd>Shift+F8</kbd> in Word or Shrink Selection in JetBrains.
 - "Next" stays at the same level, like Helix' <kbd>Alt+n</kbd> (select next sibling), and keeps whether the marks were included.
 - Steps that would not change the selection are skipped, and the status bar names what is selected.
 

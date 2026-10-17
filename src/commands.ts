@@ -8,9 +8,19 @@ interface CommandSpec {
 	run: (editor: Editor) => void;
 }
 
-/** Registers the editor commands. No default hotkeys: assign them in Settings → Hotkeys. */
+/**
+ * Registers the editor commands. No default hotkeys: assign them in Settings → Hotkeys.
+ * Obsidian lists commands alphabetically there, so the names are chosen to keep opposites
+ * together: choose, expand, reduce, same kind next/previous, quotes or formatting next/previous.
+ */
 export function registerCommands(plugin: Plugin, controller: SelectionController): void {
 	const commands: CommandSpec[] = [
+		{
+			id: 'choose-selection',
+			name: 'Choose what to select',
+			icon: 'list',
+			run: (editor) => controller.pick(editor),
+		},
 		{
 			id: 'expand-selection',
 			name: 'Expand selection',
@@ -19,37 +29,31 @@ export function registerCommands(plugin: Plugin, controller: SelectionController
 		},
 		{
 			id: 'shrink-selection',
-			name: 'Shrink selection',
+			name: 'Reduce selection',
 			icon: 'shrink',
 			run: (editor) => controller.shrink(editor),
 		},
 		{
-			id: 'choose-selection',
-			name: 'Choose what to select',
-			icon: 'list',
-			run: (editor) => controller.pick(editor),
-		},
-		{
 			id: 'select-next-unit',
-			name: 'Select next of the same kind',
+			name: 'Select same kind: next',
 			icon: 'arrow-right',
 			run: (editor) => controller.selectSibling(editor, 1),
 		},
 		{
 			id: 'select-previous-unit',
-			name: 'Select previous of the same kind',
+			name: 'Select same kind: previous',
 			icon: 'arrow-left',
 			run: (editor) => controller.selectSibling(editor, -1),
 		},
 		{
 			id: 'select-next-enclosed',
-			name: 'Select next text in quotes, brackets or formatting',
+			name: 'Select text in quotes, brackets or formatting: next',
 			icon: 'chevron-right',
 			run: (editor) => controller.selectEnclosed(editor, 1),
 		},
 		{
 			id: 'select-previous-enclosed',
-			name: 'Select previous text in quotes, brackets or formatting',
+			name: 'Select text in quotes, brackets or formatting: previous',
 			icon: 'chevron-left',
 			run: (editor) => controller.selectEnclosed(editor, -1),
 		},

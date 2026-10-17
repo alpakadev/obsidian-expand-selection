@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Analysis } from '../src/core/analysis';
-import { stepsForSelection } from '../src/core/operations';
+import { lineAround, stepsForSelection } from '../src/core/operations';
 import { DEFAULT_OPTIONS } from '../src/core/types';
 import { parse } from './helpers';
 
@@ -39,5 +39,23 @@ describe('steps shown by the picker', () => {
 	it('highlights the next larger step for a selection made by hand', () => {
 		const { rows, index } = picker('- **Bold «words.** Re»st.');
 		assert.equal(rows[index], '**Bold words.** Rest.');
+	});
+});
+
+describe('the current line', () => {
+	const line = (marked: string) => {
+		const { text, selection } = parse(marked);
+		const unit = lineAround(new Analysis(text, DEFAULT_OPTIONS), selection);
+		return unit ? text.slice(unit.from, unit.to) : null;
+	};
+
+	it('is the whole line, with bullet and indentation', () => {
+		assert.equal(line('- a\n  - **Bo¦ld.** Rest.\n- c'), '  - **Bold.** Rest.');
+		assert.equal(line('> quo¦ted'), '> quoted');
+	});
+
+	it('is missing when the selection spans lines or the line is empty', () => {
+		assert.equal(line('- «a\n- b»'), null);
+		assert.equal(line('a\n¦\nb'), null);
 	});
 });

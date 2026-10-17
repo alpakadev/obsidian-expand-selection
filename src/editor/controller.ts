@@ -1,4 +1,3 @@
-import type { EditorView } from '@codemirror/view';
 import type { Editor } from 'obsidian';
 import { Analysis } from '../core/analysis';
 import {
@@ -7,11 +6,23 @@ import {
 	selectEnclosed,
 	selectSibling,
 	shrinkSelection,
-	stepsForSelection,
 } from '../core/operations';
-import { Range, Reference, SelectionOptions, Unit, sameRange } from '../core/types';
-import { PickerAnchor, SelectionPicker } from '../ui/picker';
-import { OffsetSelection, SelectionHistory, Snapshot, snapshotOf } from './history';
+import type { Range, Reference, SelectionOptions, Unit } from '../core/types';
+import type { PickerAnchor, PickerView } from '../ui/picker';
+import { SelectionHistory, Snapshot, snapshotOf } from './history';
+import { PickerSession } from './picker-session';
+import {
+	OffsetSelection,
+	Scroll,
+	editorView,
+	keepSelections,
+	mainIndex,
+	orient,
+	readSelections,
+	setSelections,
+	settledScroll,
+	toRange,
+} from './selections';
 
 /** Tells the user what was selected. */
 export interface SelectionFeedback {
@@ -33,26 +44,29 @@ type Step = (
 /** Applies the selection operations to every cursor of an Obsidian editor. */
 export class SelectionController {
 	private readonly history = new SelectionHistory();
-	private readonly picker = new SelectionPicker();
+	private session: PickerSession | null = null;
+	/** Counts selection changes, so a late check of an older one does nothing. */
+	private changes = 0;
 
 	constructor(
 		private readonly options: () => SelectionOptions,
 		private readonly feedback: SelectionFeedback,
+		private readonly view: PickerView,
 	) {}
 
 	expand(editor: Editor): void {
-		if (this.picker.isOpen) return this.picker.step(1);
+		if (this.session?.isOpen) return this.session.step(1);
 		this.run(editor, 'expand', 'Nothing larger to select', (analysis, selection) =>
 			expandSelection(analysis, selection),
 		);
 	}
 
 	shrink(editor: Editor): void {
-		if (this.picker.isOpen) return this.picker.step(-1);
+		if (this.session?.isOpen) return this.session.step(-1);
 		const text = editor.getValue();
 		const previous = this.history.pop(text, readSelections(editor));
 		if (previous) {
-			this.apply(editor, previous.selections, mainIndex(editor, previous.selections));
+			this.apply(editor, previous.selections, mainIndex(editor, previous.selections), 'keep', previous.label);
 			this.history.update(readSelections(editor));
 			if (previous.label) this.feedback.show(previous.label);
 			else this.feedback.clear();
@@ -64,7 +78,7 @@ export class SelectionController {
 	}
 
 	selectSibling(editor: Editor, direction: Direction): void {
-		if (this.picker.isOpen) return this.picker.move(direction);
+		if (this.session?.isOpen) return this.session.jump(direction);
 		const message = direction > 0 ? 'Nothing further of this kind' : 'Nothing earlier of this kind';
 		this.run(editor, 'jump', message, (analysis, selection, _head, reference) =>
 			selectSibling(analysis, selection, direction, reference ?? undefined),
@@ -72,87 +86,38 @@ export class SelectionController {
 	}
 
 	selectEnclosed(editor: Editor, direction: Direction): void {
-		this.picker.close();
+		this.closePicker();
 		const message = direction > 0 ? 'No further enclosed text' : 'No earlier enclosed text';
 		this.run(editor, 'jump', message, (analysis, selection) =>
 			selectEnclosed(analysis, selection, direction),
 		);
 	}
 
-	/** Opens the picker with every step around the main selection. Pressing the hotkey again grows it. */
+	/** Opens the picker around the main selection. Pressing the hotkey again picks the next larger row. */
 	pick(editor: Editor): void {
-		if (this.picker.isOpen) return this.picker.step(1);
-		const text = editor.getValue();
-		const analysis = new Analysis(text, this.options());
-		const original = readSelections(editor);
-		const main = original[mainIndex(editor, original)]!;
-		let { steps, index } = stepsForSelection(analysis, toRange(main), main.head);
-		if (steps.length === 0) {
-			this.feedback.show('Nothing to select');
-			return;
-		}
-		let moved = false;
-		const show = (unit: Unit) => {
-			this.apply(editor, [orient(main, unit)], 0);
-			this.feedback.show(unit.label);
-		};
-		const items = () => steps.map((unit) => ({ label: unit.label, preview: preview(text, unit) }));
-
-		this.picker.open(items(), index, anchorAt(editor, main.head), {
-			highlight: (i) => {
-				index = i;
-				show(steps[i]!);
+		if (this.session?.isOpen) return this.session.step(1);
+		const session = new PickerSession(
+			editor,
+			{
+				options: this.options,
+				apply: (e, selections, main, scroll, label) => this.apply(e, selections, main, scroll, label),
+				feedback: this.feedback,
+				history: this.history,
+				settle: () => {
+					this.changes++;
+				},
+				anchorAt,
 			},
-			move: (direction) => {
-				const current = steps[index]!;
-				const next = selectSibling(analysis, current, direction, {
-					kind: current.kind,
-					key: current.key,
-				});
-				if (!next) return;
-				moved = true;
-				({ steps, index } = stepsForSelection(analysis, next, next.to));
-				// Keep the kind that was moved along, even if the same text has another name.
-				const exact = steps.findIndex((unit) => sameRange(unit, next));
-				if (exact >= 0) {
-					steps[exact] = next;
-					index = exact;
-				}
-				this.picker.update(items(), index);
-				show(steps[index]!);
-				editor.scrollIntoView(toEditorRange(editor, next));
-				window.requestAnimationFrame(() => this.picker.place(anchorAt(editor, next.from)));
-			},
-			choose: (i) => {
-				const chosen = steps[i]!;
-				show(chosen);
-				const stepSnapshot = (unit: Unit): Snapshot => ({
-					selections: [orient(main, unit)],
-					label: unit.label,
-					references: [{ kind: unit.kind, key: unit.key }],
-				});
-				// Shrinking goes back down through the smaller steps, then to where the cursor was.
-				const below = steps.slice(0, i).map(stepSnapshot);
-				const stack = moved ? below : [snapshotOf(original), ...below];
-				this.history.reset(
-					text,
-					{ ...stepSnapshot(chosen), selections: readSelections(editor) },
-					stack,
-				);
-				editor.focus();
-			},
-			cancel: (refocus) => {
-				this.apply(editor, original, mainIndex(editor, original));
-				this.feedback.clear();
-				if (refocus) editor.focus();
-			},
-		});
-		show(steps[index]!);
+			this.view,
+		);
+		if (session.start()) this.session = session;
+		else this.feedback.show('Nothing to select');
 	}
 
 	/** Closes the picker without changing the selection, for example when the plugin unloads. */
 	closePicker(): void {
-		this.picker.close();
+		this.session?.close();
+		this.session = null;
 	}
 
 	private run(editor: Editor, mode: Mode, nothing: string, step: Step): void {
@@ -173,7 +138,8 @@ export class SelectionController {
 			return unit ? orient(selection, unit) : selection;
 		});
 
-		this.apply(editor, next, main);
+		const label = units[main]?.label ?? null;
+		this.apply(editor, next, main, mode === 'jump' ? 'reveal' : 'keep', label);
 		const after = readSelections(editor);
 		// The editor merges overlapping selections; then the kinds no longer line up.
 		const references =
@@ -182,76 +148,40 @@ export class SelectionController {
 						unit ? { kind: unit.kind, key: unit.key } : (previous?.references[i] ?? null),
 					)
 				: after.map(() => null);
-		const label = units[main]?.label ?? null;
 		const snapshot: Snapshot = { selections: after, label, references };
 		if (mode === 'expand') this.history.push(text, previous ?? snapshotOf(selections), snapshot);
 		else this.history.reset(text, snapshot);
 		if (label) this.feedback.show(label);
 		else this.feedback.clear();
-
-		const target = units[main];
-		if (mode === 'jump' && target) editor.scrollIntoView(toEditorRange(editor, target));
 	}
 
-	private apply(editor: Editor, selections: OffsetSelection[], main: number): void {
-		this.feedback.quietly(() =>
-			editor.setSelections(
-				selections.map((s) => ({
-					anchor: editor.offsetToPos(s.anchor),
-					head: editor.offsetToPos(s.head),
-				})),
-				Math.min(main, selections.length - 1),
-			),
+	/** Sets the selections and keeps them exact, even if Live Preview widens them over hidden marks. */
+	private apply(
+		editor: Editor,
+		selections: OffsetSelection[],
+		main: number,
+		scroll: Scroll,
+		label: string | null = null,
+	): void {
+		const change = ++this.changes;
+		this.feedback.quietly(() => setSelections(editor, selections, main, scroll));
+		keepSelections(
+			editor,
+			selections,
+			() => {
+				this.feedback.quietly(() => setSelections(editor, selections, main, settledScroll(scroll)));
+				if (label) this.feedback.show(label);
+			},
+			() => change === this.changes,
 		);
 	}
 }
 
-function readSelections(editor: Editor): OffsetSelection[] {
-	return editor.listSelections().map((s) => ({
-		anchor: editor.posToOffset(s.anchor),
-		head: editor.posToOffset(s.head),
-	}));
-}
-
-/** Index of the main selection: the one whose head is the editor's cursor. */
-function mainIndex(editor: Editor, selections: OffsetSelection[]): number {
-	const head = editor.posToOffset(editor.getCursor('head'));
-	const index = selections.findIndex((s) => s.head === head);
-	return index >= 0 ? index : selections.length - 1;
-}
-
-function toRange(selection: OffsetSelection): Range {
-	return {
-		from: Math.min(selection.anchor, selection.head),
-		to: Math.max(selection.anchor, selection.head),
-	};
-}
-
-function toEditorRange(editor: Editor, range: Range) {
-	return { from: editor.offsetToPos(range.from), to: editor.offsetToPos(range.to) };
-}
-
-/** Keeps the direction of a backward selection, so the cursor stays on the side it was on. */
-function orient(previous: OffsetSelection, range: Range): OffsetSelection {
-	return previous.anchor > previous.head
-		? { anchor: range.to, head: range.from }
-		: { anchor: range.from, head: range.to };
-}
-
-/** One line of text for the picker: whitespace collapsed, long text shortened in the middle at word breaks. */
-function preview(text: string, range: Range): string {
-	const flat = text.slice(range.from, range.to).replace(/\s+/g, ' ').trim();
-	if (flat.length <= 50) return flat;
-	const start = flat.slice(0, 30).replace(/\s+\S*$/, '');
-	const end = flat.slice(-18).replace(/^\S*\s+/, '');
-	return `${start} … ${end}`;
-}
-
 /** Screen position of a document offset, from CodeMirror when available. */
 function anchorAt(editor: Editor, offset: number): PickerAnchor {
-	const view = (editor as unknown as { cm?: EditorView }).cm;
-	const coords = view?.coordsAtPos?.(offset);
+	const coords = editorView(editor)?.coordsAtPos(offset);
 	if (coords) return { left: coords.left, top: coords.top, bottom: coords.bottom };
+	if (typeof activeWindow === 'undefined') return { left: 0, top: 0, bottom: 0 }; // unit tests
 	const selection = activeWindow.getSelection();
 	const rect = selection && selection.rangeCount > 0 ? selection.getRangeAt(0).getBoundingClientRect() : null;
 	if (rect && rect.height > 0) return { left: rect.left, top: rect.top, bottom: rect.bottom };

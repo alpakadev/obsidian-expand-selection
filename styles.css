@@ -1,9 +1,9 @@
-/* Picker: the list of selection steps next to the cursor. */
+/* Picker: one row per thing around the cursor. */
 .smart-select-picker {
 	position: fixed;
 	z-index: var(--layer-menu);
-	min-width: 280px;
-	max-width: min(520px, calc(100vw - 16px));
+	min-width: 300px;
+	max-width: min(560px, calc(100vw - 16px));
 	padding: var(--size-2-2);
 	background-color: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
@@ -15,31 +15,30 @@
 
 .smart-select-picker-list {
 	display: grid;
-	grid-template-columns: 1.2em max-content minmax(0, 1fr);
+	grid-template-columns: max-content minmax(0, 1fr) auto auto;
 	column-gap: var(--size-4-3);
 	max-height: 60vh;
 	overflow-y: auto;
 }
 
-/* Rows share the list's columns, so labels and previews line up. */
+/* Rows share the list's columns, so labels, previews and buttons line up. */
 .smart-select-picker-item {
 	display: grid;
 	grid-column: 1 / -1;
 	grid-template-columns: subgrid;
-	align-items: baseline;
-	padding: var(--size-2-2) var(--size-4-2);
+	align-items: center;
+	min-height: 28px;
+	padding: 0 var(--size-2-2) 0 var(--size-4-2);
 	border-radius: var(--radius-s);
 	cursor: var(--cursor);
 }
 
-.smart-select-picker-item.is-selected {
+.smart-select-picker-item:hover {
 	background-color: var(--background-modifier-hover);
 }
 
-.smart-select-picker-key {
-	color: var(--text-faint);
-	font-family: var(--font-monospace);
-	text-align: right;
+.smart-select-picker-item.is-selected {
+	background-color: var(--background-modifier-active-hover, var(--background-modifier-hover));
 }
 
 .smart-select-picker-label {
@@ -53,7 +52,59 @@
 	white-space: nowrap;
 }
 
-.smart-select-picker-hint {
+.smart-select-picker-lines {
+	color: var(--text-faint);
+}
+
+/* The marks chip and the jump buttons keep their space on every row, but show on the highlighted one. */
+.smart-select-picker-marks,
+.smart-select-picker-jump {
+	visibility: hidden;
+}
+
+.smart-select-picker-item.is-selected .smart-select-picker-marks:not(.is-hidden),
+.smart-select-picker-item.is-selected.can-jump .smart-select-picker-jump {
+	visibility: visible;
+}
+
+.smart-select-picker-marks {
+	height: auto;
+	padding: 0 var(--size-4-1);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: none;
+	box-shadow: none;
+	color: var(--text-faint);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+}
+
+.smart-select-picker-marks.is-on {
+	border-style: solid;
+	border-color: var(--background-modifier-border-hover);
+	color: var(--text-accent);
+}
+
+.smart-select-picker-jump {
+	display: inline-flex;
+	align-items: center;
+}
+
+.smart-select-picker-jump .clickable-icon.is-disabled {
+	color: var(--text-faint);
+	opacity: 0.4;
+	pointer-events: none;
+}
+
+.smart-select-picker-counter {
+	min-width: 3ch;
+	color: var(--text-accent);
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.smart-select-picker-hint,
+.smart-select-picker-tap {
 	margin-top: var(--size-2-2);
 	padding: var(--size-2-2) var(--size-4-2) 0;
 	border-top: 1px solid var(--background-modifier-border);
@@ -66,7 +117,27 @@
 	display: none;
 }
 
+.is-mobile .smart-select-picker-item {
+	min-height: 40px;
+}
+
+.is-mobile .smart-select-picker-marks,
+.is-mobile .smart-select-picker-jump .clickable-icon {
+	min-width: 32px;
+	min-height: 32px;
+}
+
 /* Abbreviations: removable tags. */
+.smart-select-message {
+	margin: calc(-1 * var(--size-2-2)) 0 var(--size-2-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.smart-select-message.mod-warning {
+	color: var(--text-warning);
+}
+
 .smart-select-tags {
 	display: flex;
 	flex-wrap: wrap;
@@ -86,6 +157,17 @@
 
 .smart-select-tag-remove.clickable-icon {
 	padding: var(--size-2-1);
+}
+
+.smart-select-tag.is-flashing {
+	animation: smart-select-flash 1.2s ease-out;
+	box-shadow: 0 0 0 2px var(--text-warning);
+}
+
+@keyframes smart-select-flash {
+	from {
+		background-color: var(--background-modifier-error);
+	}
 }
 
 .smart-select-tags-empty {

@@ -85,6 +85,25 @@ export function shrinkSelection(analysis: Analysis, selection: Range, head: numb
 	return inside[inside.length - 1] ?? null;
 }
 
+/** A whole line, from its first column to the end of its text, or null for a blank line. */
+export function lineUnit(analysis: Analysis, index: number): Unit | null {
+	const line = analysis.structure.lines[index];
+	if (!line || line.kind === 'blank') return null;
+	return { kind: 'line', key: 'whole', label: 'Line', from: line.from, to: line.contentTo };
+}
+
+/**
+ * The whole line a selection is on, or null when the selection spans several lines or the line
+ * is blank. A selection that ends at the start of the next line (a triple-click) counts as one line.
+ */
+export function lineAround(analysis: Analysis, selection: Range): Unit | null {
+	const structure = analysis.structure;
+	const first = structure.lineAt(selection.from);
+	let last = structure.lineAt(selection.to);
+	if (last > first && selection.to > selection.from && structure.lines[last]!.from === selection.to) last--;
+	return last === first ? lineUnit(analysis, first) : null;
+}
+
 /** What kind of unit a selection is, for "next/previous of the same kind". */
 export function referenceOf(analysis: Analysis, selection: Range): Reference | null {
 	if (selection.from === selection.to) return { kind: 'word' };
@@ -126,6 +145,15 @@ export function selectSibling(
 	}
 	if (kind === 'section') {
 		return closest(analysis.structure.allSections().filter(matches), direction);
+	}
+	if (kind === 'line' && key === 'whole') {
+		const lines = analysis.structure.lines;
+		const start = analysis.structure.lineAt(direction > 0 ? selection.to : selection.from);
+		for (let i = start + direction; i >= 0 && i < lines.length; i += direction) {
+			const unit = lineUnit(analysis, i);
+			if (unit && !sameRange(unit, selection)) return unit;
+		}
+		return null;
 	}
 	const lines = analysis.structure.lines;
 	const start = analysis.structure.lineAt(direction > 0 ? selection.to : selection.from);

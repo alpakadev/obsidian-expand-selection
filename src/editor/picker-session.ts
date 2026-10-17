@@ -14,6 +14,7 @@ import { Reference, SelectionOptions, Unit, containsRange, rangeLength, sameRang
 import type { PickerAnchor, PickerHandlers, PickerModel, PickerView } from '../ui/picker';
 import type { SelectionFeedback } from './controller';
 import { SelectionHistory, Snapshot, snapshotOf } from './history';
+import { markPreview } from './preview-mark';
 import {
 	OffsetSelection,
 	Scroll,
@@ -178,19 +179,31 @@ export class PickerSession implements PickerHandlers {
 		focusKeepingScroll(this.editor);
 	}
 
+	/**
+	 * Leaving without choosing — Esc, a click into the note, or the focus going elsewhere — puts
+	 * back the selection and the view from before the picker opened.
+	 */
 	cancel(reason: 'escape' | 'blur', target: Node | null = null): void {
 		if (!this.open) return;
 		const intoNote = reason === 'blur' && target !== null && !!editorView(this.editor)?.dom.contains(target);
 		this.close();
-		if (intoNote) {
-			// The click places the cursor; nothing to put back.
-			this.context.settle();
+		const restore = () => {
+			this.context.apply(this.editor, this.original, this.mainIndex, { restore: this.home }, null);
 			this.context.feedback.clear();
-			return;
-		}
-		this.context.apply(this.editor, this.original, this.mainIndex, { restore: this.home }, null);
-		this.context.feedback.clear();
-		if (reason === 'escape') focusKeepingScroll(this.editor);
+			if (reason === 'escape' || intoNote) focusKeepingScroll(this.editor);
+		};
+		if (!intoNote || !target) return restore();
+		// The editor is still handling the click; put things back once the button is released.
+		const win = target.ownerDocument?.defaultView ?? window;
+		let done = false;
+		const once = () => {
+			if (done) return;
+			done = true;
+			win.removeEventListener('pointerup', once, true);
+			win.setTimeout(restore, 0);
+		};
+		win.addEventListener('pointerup', once, true);
+		win.setTimeout(once, 1000);
 	}
 
 	layout(): void {
@@ -206,6 +219,7 @@ export class PickerSession implements PickerHandlers {
 		this.open = false;
 		for (const [target, type, listener] of this.listeners) target.removeEventListener(type, listener);
 		this.listeners.length = 0;
+		markPreview(this.editor, null);
 		this.view.close();
 	}
 
@@ -242,7 +256,9 @@ export class PickerSession implements PickerHandlers {
 	}
 
 	private preview(unit: Unit, scroll: Scroll): void {
-		this.context.apply(this.editor, [orient(this.main, unit)], 0, scroll, unit.label);
+		const selection = orient(this.main, unit);
+		this.context.apply(this.editor, [selection], 0, scroll, unit.label);
+		markPreview(this.editor, selection);
 		this.context.feedback.show(unit.label);
 		this.view.render(this.model());
 	}

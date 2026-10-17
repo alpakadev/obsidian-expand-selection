@@ -1,3 +1,27 @@
+/* The previewed selection while the picker has the focus, drawn like a focused selection. */
+.smart-select-preview {
+	background-color: var(--text-selection);
+	border-radius: 2px;
+	box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+.smart-select-preview-caret {
+	display: inline-block;
+	width: 0;
+	height: 1.2em;
+	margin: 0 -1px;
+	border-left: 2px solid var(--caret-color, var(--interactive-accent));
+	vertical-align: text-bottom;
+	animation: smart-select-blink 1.1s steps(1) infinite;
+	pointer-events: none;
+}
+
+@keyframes smart-select-blink {
+	50% {
+		opacity: 0;
+	}
+}
+
 /* Picker: one row per thing around the cursor. */
 .smart-select-picker {
 	position: fixed;

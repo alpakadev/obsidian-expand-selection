@@ -1,10 +1,11 @@
 import type { Analysis } from './analysis';
+import { isWordChar } from './chars';
 import type { TextBlock } from './structure';
 import {
 	INLINE_KINDS,
 	Range,
+	Reference,
 	Unit,
-	UnitKind,
 	containsRange,
 	rangeLength,
 	sameRange,
@@ -22,43 +23,94 @@ export function expandSelection(analysis: Analysis, selection: Range): Unit | nu
 	return analysis.stepsAround(probe).find((unit) => rangeLength(unit) > length) ?? null;
 }
 
+/** All expansion steps from a cursor position outward, smallest first. */
+export function ladder(analysis: Analysis, point: number): Unit[] {
+	const snapped = analysis.snap(point);
+	let current: Range = { from: snapped, to: snapped };
+	const steps: Unit[] = [];
+	for (const unit of analysis.stepsAround(current)) {
+		if (rangeLength(unit) > rangeLength(current) && containsRange(unit, current)) {
+			steps.push(unit);
+			current = unit;
+		}
+	}
+	return steps;
+}
+
 /**
- * The largest unit inside a selection, found around the cursor end of the selection.
- * Used when there is no expansion history to step back through.
+ * The position a selection's steps are built around: the last letter on the cursor side,
+ * so that `**Bold.**` selected from left to right is treated like a cursor in “Bold”.
+ */
+export function focusPoint(analysis: Analysis, selection: Range, head: number): number {
+	const text = analysis.text;
+	if (selection.from === selection.to) return selection.from;
+	if (head <= selection.from) {
+		for (let i = selection.from; i < selection.to; i++) if (isWordChar(text[i])) return i;
+		return selection.from;
+	}
+	for (let i = selection.to - 1; i >= selection.from; i--) if (isWordChar(text[i])) return i;
+	return selection.to - 1;
+}
+
+/**
+ * The steps around a selection and which of them is selected now.
+ * When the selection is not a step itself, `index` points at the next larger step.
+ */
+export function stepsForSelection(
+	analysis: Analysis,
+	selection: Range,
+	head: number,
+): { steps: Unit[]; index: number } {
+	const steps = ladder(analysis, focusPoint(analysis, selection, head));
+	if (selection.from === selection.to) return { steps, index: 0 };
+	const exact = steps.findIndex((unit) => sameRange(unit, selection));
+	if (exact >= 0) return { steps, index: exact };
+	const length = rangeLength(selection);
+	const smaller = steps.filter((u) => containsRange(selection, u) && rangeLength(u) < length);
+	const larger = steps.filter((u) => containsRange(u, selection) && rangeLength(u) > length);
+	return { steps: [...smaller, ...larger], index: Math.min(smaller.length, smaller.length + larger.length - 1) };
+}
+
+/**
+ * One step smaller than the selection: the step below it when it is a step itself,
+ * otherwise the largest step inside it, around the cursor end.
  */
 export function shrinkSelection(analysis: Analysis, selection: Range, head: number): Unit | null {
+	if (selection.from === selection.to) return null;
+	const steps = ladder(analysis, focusPoint(analysis, selection, head));
+	const exact = steps.findIndex((unit) => sameRange(unit, selection));
+	if (exact >= 0) return steps[exact - 1] ?? null;
 	const length = rangeLength(selection);
-	if (length === 0) return null;
-	const point = head >= selection.to ? selection.to - 1 : head;
-	const inside = analysis
-		.stepsAround({ from: point, to: point })
-		.filter(
-			(unit) =>
-				containsRange(selection, unit) && rangeLength(unit) < length && rangeLength(unit) > 0,
-		);
+	const inside = steps.filter((u) => containsRange(selection, u) && rangeLength(u) < length);
 	return inside[inside.length - 1] ?? null;
+}
+
+/** What kind of unit a selection is, for "next/previous of the same kind". */
+export function referenceOf(analysis: Analysis, selection: Range): Reference | null {
+	if (selection.from === selection.to) return { kind: 'word' };
+	const steps = analysis.stepsAround(selection);
+	const unit =
+		steps.find((u) => sameRange(u, selection)) ??
+		steps.find((u) => rangeLength(u) > rangeLength(selection));
+	return unit ? { kind: unit.kind, key: unit.key } : null;
 }
 
 /**
  * The next or previous unit of the same kind as the selection: word → next word,
- * sentence → next sentence, text in quotes → next text in quotes, list item → next list item.
- * An empty selection steps by words.
+ * sentence → next sentence, list item → next list item. Text inside quotes, brackets or
+ * formatting goes to the next such text, with or without the marks as before.
+ * `reference` says what kind the selection is; it is worked out from the text when missing.
  */
 export function selectSibling(
 	analysis: Analysis,
 	selection: Range,
 	direction: Direction,
+	reference: Reference | null = referenceOf(analysis, selection),
 ): Unit | null {
-	let kind: UnitKind = 'word';
-	let key: string | undefined;
-	if (selection.from !== selection.to) {
-		const steps = analysis.stepsAround(selection);
-		const reference =
-			steps.find((unit) => sameRange(unit, selection)) ??
-			steps.find((unit) => rangeLength(unit) > rangeLength(selection));
-		if (!reference || reference.kind === 'document') return null;
-		kind = reference.kind;
-		key = reference.key;
+	if (!reference || reference.kind === 'document') return null;
+	const { kind, key } = reference;
+	if (kind === 'pair-inner' || kind === 'pair-outer') {
+		return nextPair(analysis, selection, direction, kind === 'pair-outer');
 	}
 	const matches = (unit: Unit) =>
 		unit.kind === kind &&
@@ -94,23 +146,34 @@ export function selectEnclosed(
 	selection: Range,
 	direction: Direction,
 ): Unit | null {
+	return nextPair(analysis, selection, direction, false);
+}
+
+/** The next pair of any kind: its inner text (innermost), or the whole pair with marks (outermost). */
+function nextPair(
+	analysis: Analysis,
+	selection: Range,
+	direction: Direction,
+	outer: boolean,
+): Unit | null {
 	return searchBlocks(analysis, selection, direction, (block) => {
 		const units = analysis.inlineUnits(block);
-		const outers = units.filter(
+		const pairs = units.filter(
 			(unit) =>
 				unit.kind === 'pair-outer' &&
 				unit.inner !== undefined &&
-				unit.inner.from < unit.inner.to &&
+				(outer || unit.inner.from < unit.inner.to) &&
+				!sameRange(unit, selection) &&
 				(direction > 0 ? unit.from >= selection.to : unit.to <= selection.from),
 		);
-		let best: Unit | null = closest(outers, direction, true);
+		let best: Unit | null = closest(pairs, direction, true);
+		if (!best || outer) return best ? [best] : [];
 		while (best) {
 			const inner: Range = best.inner!;
-			const nested: Unit | undefined = outers.find((unit) => sameRange(unit, inner));
+			const nested: Unit | undefined = pairs.find((unit) => sameRange(unit, inner));
 			if (!nested) break;
 			best = nested;
 		}
-		if (!best) return [];
 		const { key, inner } = best;
 		const unit = units.find(
 			(u) => u.kind === 'pair-inner' && u.key === key && inner !== undefined && sameRange(u, inner),

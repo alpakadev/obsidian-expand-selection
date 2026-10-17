@@ -1,3 +1,5 @@
+import { DEFAULT_ABBREVIATIONS, abbreviationSet } from './abbreviations';
+
 /** A half-open range of document offsets. */
 export interface Range {
 	from: number;
@@ -15,6 +17,7 @@ export type UnitKind =
 	| 'pair-inner'
 	| 'pair-outer'
 	| 'link'
+	| 'link-part'
 	| 'line'
 	| 'block-content'
 	| 'list-item'
@@ -41,21 +44,30 @@ export interface Unit extends Range {
 	inner?: Range;
 }
 
+/** Identifies a kind of unit, for "select the next one of these". */
+export interface Reference {
+	kind: UnitKind;
+	key?: string;
+}
+
 /**
  * When two units cover exactly the same text, the one listed first wins.
  * This decides the label that is shown and what "same kind" means.
+ * Visible markup (formatting, quotes, links) wins over sentences: a bold sentence
+ * is treated as bold text, so "next" goes to the next bold or quoted text.
  */
 export const KIND_PRIORITY: readonly UnitKind[] = [
 	'word',
+	'link-part',
 	'compound',
 	'tag',
+	'pair-outer',
+	'pair-inner',
+	'link',
 	'sentence-bare',
 	'sentence',
 	'clause',
 	'cell',
-	'pair-outer',
-	'pair-inner',
-	'link',
 	'line',
 	'block-content',
 	'list-item',
@@ -83,6 +95,7 @@ export const INLINE_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
 	'pair-inner',
 	'pair-outer',
 	'link',
+	'link-part',
 ]);
 
 export interface SelectionOptions {
@@ -100,29 +113,13 @@ export interface SelectionOptions {
 	abbreviations: ReadonlySet<string>;
 }
 
-export const DEFAULT_ABBREVIATIONS = [
-	'Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Sr.', 'Jr.', 'St.', 'vs.',
-	'e.g.', 'i.e.', 'cf.', 'approx.', 'fig.', 'vol.', 'al.', 'ca.',
-	'z.B.', 'd.h.', 'u.a.', 'bzw.', 'vgl.', 'ggf.', 'evtl.', 'inkl.',
-	'sog.', 'bspw.', 'Nr.', 'Abs.', 'Hr.', 'Fr.', 'o.ä.', 'u.U.', 'z.T.',
-].join(' ');
-
-export function parseAbbreviations(text: string): Set<string> {
-	const result = new Set<string>();
-	for (const part of text.split(/[\s,;]+/)) {
-		const word = part.replace(/\.+$/, '').toLowerCase();
-		if (word) result.add(word);
-	}
-	return result;
-}
-
 export const DEFAULT_OPTIONS: SelectionOptions = {
 	compoundWords: true,
 	clauses: true,
 	sentenceWithoutPunctuation: true,
 	lines: true,
 	sections: true,
-	abbreviations: parseAbbreviations(DEFAULT_ABBREVIATIONS),
+	abbreviations: abbreviationSet(DEFAULT_ABBREVIATIONS),
 };
 
 export function rangeLength(range: Range): number {

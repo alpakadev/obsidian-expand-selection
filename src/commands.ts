@@ -24,6 +24,12 @@ export function registerCommands(plugin: Plugin, controller: SelectionController
 			run: (editor) => controller.shrink(editor),
 		},
 		{
+			id: 'choose-selection',
+			name: 'Choose what to select',
+			icon: 'list',
+			run: (editor) => controller.pick(editor),
+		},
+		{
 			id: 'select-next-unit',
 			name: 'Select next of the same kind',
 			icon: 'arrow-right',

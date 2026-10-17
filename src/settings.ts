@@ -1,37 +1,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
-import { DEFAULT_ABBREVIATIONS, SelectionOptions, parseAbbreviations } from './core/types';
 import type SmartSelectPlugin from './main';
-
-export interface SmartSelectSettings {
-	compoundWords: boolean;
-	clauses: boolean;
-	sentenceWithoutPunctuation: boolean;
-	lines: boolean;
-	sections: boolean;
-	abbreviations: string;
-	showStatus: boolean;
-}
-
-export const DEFAULT_SETTINGS: SmartSelectSettings = {
-	compoundWords: true,
-	clauses: true,
-	sentenceWithoutPunctuation: true,
-	lines: true,
-	sections: true,
-	abbreviations: DEFAULT_ABBREVIATIONS,
-	showStatus: true,
-};
-
-export function toOptions(settings: SmartSelectSettings): SelectionOptions {
-	return {
-		compoundWords: settings.compoundWords,
-		clauses: settings.clauses,
-		sentenceWithoutPunctuation: settings.sentenceWithoutPunctuation,
-		lines: settings.lines,
-		sections: settings.sections,
-		abbreviations: parseAbbreviations(settings.abbreviations),
-	};
-}
+import type { SmartSelectSettings } from './settings-data';
+import { AbbreviationsModal } from './ui/abbreviations-modal';
 
 type ToggleKey = {
 	[K in keyof SmartSelectSettings]: SmartSelectSettings[K] extends boolean ? K : never;
@@ -77,26 +47,18 @@ export class SmartSelectSettingTab extends PluginSettingTab {
 		);
 		this.toggle('sections', 'Heading sections', 'Select the section under each heading before the whole note.');
 
-		new Setting(containerEl).setName('Sentences').setHeading();
+		const count = this.plugin.settings.abbreviations.length;
 		new Setting(containerEl)
 			.setName('Abbreviations')
-			.setDesc('Words that end with a period but do not end a sentence. Separate them with spaces.')
-			.addTextArea((text) => {
-				text.inputEl.rows = 4;
-				text.setValue(this.plugin.settings.abbreviations).onChange(async (value) => {
-					this.plugin.settings.abbreviations = value;
-					await this.plugin.saveSettings();
-				});
-			})
-			.addExtraButton((button) =>
-				button
-					.setIcon('rotate-ccw')
-					.setTooltip('Restore default abbreviations')
-					.onClick(async () => {
-						this.plugin.settings.abbreviations = DEFAULT_ABBREVIATIONS;
+			.setDesc(`A period after these doesn’t end a sentence, like “e.g.” or “z.B.” (${count} words).`)
+			.addButton((button) =>
+				button.setButtonText('Edit').onClick(() => {
+					new AbbreviationsModal(this.app, this.plugin.settings.abbreviations, async (words) => {
+						this.plugin.settings.abbreviations = words;
 						await this.plugin.saveSettings();
 						this.display();
-					}),
+					}).open();
+				}),
 			);
 
 		new Setting(containerEl).setName('Display').setHeading();

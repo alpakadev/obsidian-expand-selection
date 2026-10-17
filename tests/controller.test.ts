@@ -99,7 +99,7 @@ describe('selection controller', () => {
 		controller.expand(asEditor);
 		controller.expand(asEditor);
 		assert.deepEqual(editor.selected(), ['Bold sentence here.']);
-		assert.equal(feedback.shown, 'Sentence');
+		assert.equal(feedback.shown, 'Inside **…**');
 		controller.shrink(asEditor);
 		assert.deepEqual(editor.selected(), ['Bold sentence here']);
 		assert.equal(feedback.shown, 'Sentence without final punctuation');
@@ -129,17 +129,39 @@ describe('selection controller', () => {
 		assert.ok(backward!.anchor > backward!.head);
 	});
 
-	it('jumps to the next unit and scrolls to it', () => {
-		const { editor, feedback, controller, asEditor } = setup(cursor(TEXT.indexOf('Bold') + 1));
+	it('jumps to the next unit of the same kind and scrolls to it', () => {
+		const { editor, feedback, controller, asEditor } = setup(cursor(TEXT.indexOf('Second') + 1));
 		controller.expand(asEditor);
 		controller.expand(asEditor);
 		controller.expand(asEditor);
-		controller.selectSibling(asEditor, 1);
 		assert.deepEqual(editor.selected(), ['Second sentence.']);
+		controller.selectSibling(asEditor, -1);
+		assert.deepEqual(editor.selected(), ['Bold sentence here.']);
 		assert.equal(feedback.shown, 'Sentence');
 		assert.ok(editor.scrolledTo);
-		controller.selectEnclosed(asEditor, -1);
+		// Still moving by sentences, although this sentence is also bold text.
+		controller.selectSibling(asEditor, 1);
+		assert.deepEqual(editor.selected(), ['Second sentence.']);
+	});
+
+	it('shrinks a selection that was reached by jumping', () => {
+		const { editor, controller, asEditor } = setup(cursor(TEXT.indexOf('Intro') + 1));
+		controller.selectEnclosed(asEditor, 1);
 		assert.deepEqual(editor.selected(), ['Bold sentence here.']);
+		controller.shrink(asEditor);
+		assert.deepEqual(editor.selected(), ['Bold sentence here']);
+	});
+
+	it('forgets the kind of unit when the text changes', () => {
+		const { editor, controller, asEditor } = setup(cursor(TEXT.indexOf('Second') + 1));
+		controller.expand(asEditor);
+		controller.expand(asEditor);
+		controller.expand(asEditor);
+		controller.selectSibling(asEditor, -1);
+		const changed = new FakeEditor(TEXT.replace('Intro.', 'Intro!'), ...editor.selections);
+		controller.selectSibling(changed as unknown as Editor, 1);
+		// Without the remembered kind, the bold sentence counts as bold text: no more of it follows.
+		assert.deepEqual(changed.selected(), ['Bold sentence here.']);
 	});
 
 	it('reports when there is nothing to do', () => {

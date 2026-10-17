@@ -8,15 +8,18 @@ Commands that expand, shrink and move the editor selection by Markdown-aware uni
     - `lines.ts` parses each line (quote prefix, indentation, list marker, heading, fence). `lists.ts` builds the list tree. `structure.ts` groups lines into text blocks and returns the block-level units around a line (list items, quotes, code blocks, tables, sections, note).
     - `pairs.ts` matches quotes, brackets and Markdown formatting; `inline.ts` finds words, sentences, clauses and pair units inside one text block.
     - `analysis.ts` combines both into `stepsAround(range)`: every unit containing a range, smallest first, deduplicated by `KIND_PRIORITY` in `types.ts`.
-    - `operations.ts` implements the commands: expand, shrink, next/previous of the same kind, next/previous enclosed text.
-- `src/editor/` — the Obsidian side: `controller.ts` applies operations to every cursor, `history.ts` remembers expansion steps for shrinking, `status.ts` shows the unit name in the status bar.
-- `src/commands.ts` registers the commands, `src/settings.ts` holds settings and the settings tab.
+    - `operations.ts` implements the commands: expand, shrink, the step list for the picker, next/previous of the same kind, next/previous enclosed text.
+    - `abbreviations.ts` holds the default abbreviations and helpers to edit the list.
+- `src/editor/` — the Obsidian side: `controller.ts` applies operations to every cursor, `history.ts` remembers the steps for shrinking and the kind of the last unit for next/previous, `status.ts` shows the unit name in the status bar.
+- `src/ui/` — `picker.ts` is the step list shown by **Choose what to select**, `abbreviations-modal.ts` edits the abbreviations.
+- `src/commands.ts` registers the commands. `src/settings-data.ts` holds the settings and reads saved data (no Obsidian imports, so it is testable); `src/settings.ts` is the settings tab.
 
 Rules for this codebase:
 
-- Command IDs (`expand-selection`, `shrink-selection`, `select-next-unit`, `select-previous-unit`, `select-next-enclosed`, `select-previous-enclosed`) are stable API. Don't rename them. Don't add default hotkeys.
+- Command IDs (`expand-selection`, `shrink-selection`, `choose-selection`, `select-next-unit`, `select-previous-unit`, `select-next-enclosed`, `select-previous-enclosed`) are stable API. Don't rename them. Don't add default hotkeys.
 - Don't use regex lookbehind (`(?<=`, `(?<!`): it is a syntax error on iOS before 16.4 and would break the plugin on mobile. The linter checks this.
 - Add a test in `tests/` for every behavior change. `npm test` bundles `tests/*.test.ts` with esbuild and runs them with `node --test`; `tests/helpers.ts` marks the cursor with `¦` and a selection with `«…»`.
+- When two units cover the same text, `KIND_PRIORITY` decides which one it is. Visible markup (formatting, quotes, links) wins over sentences. While stepping with next/previous, the controller passes the kind of the last unit along, so the priority only matters for selections made by hand and for expansion steps.
 - Before committing, run `npm run build`, `npm run lint` and `npm test`.
 
 ## Project overview

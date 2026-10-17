@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { expansionLabels, expansions, shrink } from './helpers';
+import { expansionLabels, expansions, shrink, shrinks } from './helpers';
 
 const ITEM_1 =
 	'- **Subjective intuition should not be confused with objective condemnation.** An internal instinct that someone is not a fit indicates subjective incompatibility, not an objective verdict that the other person is malicious. Reframing gut feelings as *“this is not right for me”* eliminates the burden of compiling forensic evidence before stepping away.';
@@ -28,7 +28,7 @@ describe('expand selection in the example note', () => {
 		assert.deepEqual(expansionLabels(cursorIn('intuition')), [
 			'Word',
 			'Sentence without final punctuation',
-			'Sentence',
+			'Inside **…**',
 			'Including **…**',
 			'List item text',
 			'List item',
@@ -118,17 +118,6 @@ describe('expand selection: quotes and brackets', () => {
 			'npm run build',
 			'`npm run build`',
 		]);
-		assert.deepEqual(expansions('See [[My No¦te|alias]] here.').slice(0, 3), [
-			'Note',
-			'My Note|alias',
-			'[[My Note|alias]]',
-		]);
-		assert.deepEqual(expansions('Read [foo b¦ar](https://example.com/a_b) today.').slice(0, 4), [
-			'bar',
-			'foo bar',
-			'[foo bar]',
-			'[foo bar](https://example.com/a_b)',
-		]);
 		assert.deepEqual(expansions('This is ==very imp¦ortant== stuff.').slice(0, 3), [
 			'important',
 			'very important',
@@ -144,6 +133,66 @@ describe('expand selection: quotes and brackets', () => {
 			'First sentence. Second sentence.',
 			'**First sentence. Second sentence.**',
 			'**First sentence. Second sentence.** Third.',
+		]);
+	});
+});
+
+describe('expand selection: links and embeds', () => {
+	it('selects a wiki link, then its brackets, then the ! of an embed', () => {
+		assert.deepEqual(expansions('- ![[Rising sta¦tus invites strategic deception]]\n'), [
+			'status',
+			'Rising status invites strategic deception',
+			'[[Rising status invites strategic deception]]',
+			'![[Rising status invites strategic deception]]',
+			'- ![[Rising status invites strategic deception]]',
+			'- ![[Rising status invites strategic deception]]\n',
+		]);
+	});
+
+	it('selects the target or the text of a wiki link with an alias', () => {
+		assert.deepEqual(expansions('See [[My No¦te|the alias]] here.').slice(0, 4), [
+			'Note',
+			'My Note',
+			'My Note|the alias',
+			'[[My Note|the alias]]',
+		]);
+		assert.deepEqual(expansions('See [[My Note|the al¦ias]] here.').slice(1, 3), [
+			'the alias',
+			'My Note|the alias',
+		]);
+		assert.equal(expansions('| [[My No¦te\\|alias]] |')[1], 'My Note');
+	});
+
+	it('goes from link text or URL straight to the whole Markdown link', () => {
+		assert.deepEqual(expansions('Read [Link na¦me](https://example.com/a_b) today.').slice(0, 3), [
+			'name',
+			'Link name',
+			'[Link name](https://example.com/a_b)',
+		]);
+		assert.deepEqual(expansionLabels('Read [Link na¦me](https://example.com/a_b) today.').slice(0, 3), [
+			'Word',
+			'Link text',
+			'Link',
+		]);
+		assert.deepEqual(expansions('Read [Link name](https://exa¦mple.com/a_b "Title") today.').slice(0, 3), [
+			'example',
+			'https://example.com/a_b',
+			'[Link name](https://example.com/a_b "Title")',
+		]);
+		assert.deepEqual(expansions('![Al¦t text](pic.png)').slice(0, 4), [
+			'Alt',
+			'Alt text',
+			'[Alt text](pic.png)',
+			'![Alt text](pic.png)',
+		]);
+	});
+
+	it('keeps formatting inside link text', () => {
+		assert.deepEqual(expansions('[a **bo¦ld** link](x.md)').slice(0, 4), [
+			'bold',
+			'**bold**',
+			'a **bold** link',
+			'[a **bold** link](x.md)',
 		]);
 	});
 });
@@ -266,5 +315,24 @@ describe('shrink selection without history', () => {
 		assert.equal(shrink('- «Some sentence here. Another one.»'), 'Another one.');
 		assert.equal(shrink('«Another one.»'), 'Another one');
 		assert.equal(shrink('«intuition»'), null);
+	});
+
+	it('shrinks a bold sentence selected by hand step by step', () => {
+		assert.deepEqual(
+			shrinks('- «**Mission alignment is verified by historical behavior.**» Authentic shared purpose.'),
+			[
+				'Mission alignment is verified by historical behavior.',
+				'Mission alignment is verified by historical behavior',
+				'behavior',
+			],
+		);
+	});
+
+	it('shrinks toward the start when the cursor is at the start', () => {
+		assert.deepEqual(shrinks('«**Mission alignment.**» Rest.', 'start'), [
+			'Mission alignment.',
+			'Mission alignment',
+			'Mission',
+		]);
 	});
 });

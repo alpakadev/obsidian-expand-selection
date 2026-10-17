@@ -59,17 +59,17 @@ export function analyzeInline(
 	for (const pair of scan.pairs) {
 		const inner = trim(text, { from: pair.openTo, to: pair.closeFrom });
 		const name = `${pair.open}…${pair.close}`;
-		add({ kind: 'pair-inner', label: `Inside ${name}`, key: pair.family }, inner);
+		add({ kind: 'pair-inner', label: pair.innerLabel ?? `Inside ${name}`, key: pair.family }, inner);
 		units.push({
 			kind: 'pair-outer',
-			label: `Including ${name}`,
+			label: pair.outerLabel ?? `Including ${name}`,
 			key: pair.family,
 			from: pair.from + offset,
 			to: pair.to + offset,
 			inner: { from: inner.from + offset, to: inner.to + offset },
 		});
 	}
-	for (const link of scan.links) add({ kind: 'link', label: 'Link' }, link);
+	for (const { from, to, ...link } of scan.links) add(link, { from, to });
 
 	if (mode === 'table') {
 		for (const cell of tableCells(scan.masked)) add({ kind: 'cell', label: 'Table cell' }, cell);

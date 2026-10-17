@@ -1,4 +1,4 @@
-import type { Editor } from 'obsidian';
+import type { Reference } from '../core/types';
 
 /** A selection as document offsets. */
 export interface OffsetSelection {
@@ -6,62 +6,66 @@ export interface OffsetSelection {
 	head: number;
 }
 
-/** The selections of an editor together with the label shown for them. */
+/** The selections of an editor, the label shown for them, and what kind of unit each one is. */
 export interface Snapshot {
 	selections: OffsetSelection[];
 	label: string | null;
+	references: (Reference | null)[];
 }
 
-interface State {
-	stack: Snapshot[];
-	current: Snapshot;
-	/** Document length when `current` was set, to notice edits. */
-	length: number;
+export function snapshotOf(selections: OffsetSelection[]): Snapshot {
+	return { selections, label: null, references: selections.map(() => null) };
 }
 
 /**
- * Remembers expansion steps per editor so "Shrink selection" can retrace them.
- * The history is dropped as soon as the selection or the text no longer matches the last step.
+ * Remembers the steps that led to the current selection, so "Shrink selection" can retrace
+ * them and "next/previous" keeps the kind of unit that was selected. One history is enough,
+ * since only one note is edited at a time. It no longer applies as soon as the text or the
+ * selection differs from what the last command left behind.
  */
 export class SelectionHistory {
-	private readonly states = new WeakMap<Editor, State>();
+	private text = '';
+	private stack: Snapshot[] = [];
+	private current: Snapshot | null = null;
 
-	/** Records an expansion from `before` to `after`. */
-	push(editor: Editor, before: OffsetSelection[], after: Snapshot, length: number): void {
-		const state = this.states.get(editor);
-		const continues = state !== undefined && this.isCurrent(state, before, length);
-		const stack = continues ? state.stack : [];
-		stack.push(continues ? state.current : { selections: before, label: null });
-		this.states.set(editor, { stack, current: after, length });
+	/** The current snapshot, if the editor still shows what the last command selected. */
+	matching(text: string, selections: OffsetSelection[]): Snapshot | null {
+		const current = this.current;
+		if (!current || text !== this.text || current.selections.length !== selections.length) {
+			return null;
+		}
+		const same = current.selections.every(
+			(s, i) => s.anchor === selections[i]!.anchor && s.head === selections[i]!.head,
+		);
+		return same ? current : null;
 	}
 
-	/** The snapshot before the last expansion, if the editor still shows the result of that expansion. */
-	pop(editor: Editor, selections: OffsetSelection[], length: number): Snapshot | null {
-		const state = this.states.get(editor);
-		if (!state || !this.isCurrent(state, selections, length)) return null;
-		const previous = state.stack.pop();
+	/** Records a step from `before` to `after`; continues the history if `before` is its current state. */
+	push(text: string, before: Snapshot, after: Snapshot): void {
+		if (!this.matching(text, before.selections)) this.stack = [];
+		this.stack.push(before);
+		this.current = after;
+		this.text = text;
+	}
+
+	/** Steps back, if the editor still shows the result of the last step. */
+	pop(text: string, selections: OffsetSelection[]): Snapshot | null {
+		if (!this.matching(text, selections)) return null;
+		const previous = this.stack.pop();
 		if (!previous) return null;
-		state.current = previous;
+		this.current = previous;
 		return previous;
 	}
 
+	/** Starts over at `current`, with `stack` as the steps to shrink back through. */
+	reset(text: string, current: Snapshot, stack: Snapshot[] = []): void {
+		this.text = text;
+		this.current = current;
+		this.stack = stack;
+	}
+
 	/** Replaces the current selections, for example after the editor merged overlapping ones. */
-	update(editor: Editor, selections: OffsetSelection[]): void {
-		const state = this.states.get(editor);
-		if (state) state.current = { ...state.current, selections };
-	}
-
-	/** Starts a new history at a selection that was not reached by expanding. */
-	reset(editor: Editor, current: Snapshot, length: number): void {
-		this.states.set(editor, { stack: [], current, length });
-	}
-
-	private isCurrent(state: State, selections: OffsetSelection[], length: number): boolean {
-		const current = state.current.selections;
-		return (
-			state.length === length &&
-			current.length === selections.length &&
-			current.every((s, i) => s.anchor === selections[i]!.anchor && s.head === selections[i]!.head)
-		);
+	update(selections: OffsetSelection[]): void {
+		if (this.current) this.current = { ...this.current, selections };
 	}
 }

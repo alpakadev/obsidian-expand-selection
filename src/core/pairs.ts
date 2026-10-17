@@ -1,5 +1,4 @@
 import { isPunctuation, isWhitespace, isWordChar } from './chars';
-import type { Range } from './types';
 
 export type PairFamily =
 	| 'quote'
@@ -19,17 +18,29 @@ export interface Pair {
 	open: string;
 	close: string;
 	family: PairFamily;
+	/** Labels for pairs whose delimiters make poor names, like Markdown links. */
+	innerLabel?: string;
+	outerLabel?: string;
+}
+
+/** Link pieces that are not delimiter pairs: link targets, URLs, and embeds including their `!`. */
+export interface LinkPart {
+	kind: 'link' | 'link-part';
+	key?: string;
+	label: string;
+	from: number;
+	to: number;
 }
 
 export interface PairScan {
 	pairs: Pair[];
 	/**
-	 * The scanned text with code, math, wiki links, link targets and URLs replaced by `x`,
-	 * so their content can neither end a sentence nor open a pair. Same length as the input.
+	 * The scanned text with code, math, links and URLs replaced by `x`, so their content
+	 * can neither end a sentence nor open a pair. Same length as the input.
+	 * The text of Markdown links stays visible, so formatting inside it is found.
 	 */
 	masked: string;
-	/** Markdown links and images: `[text](url)`. */
-	links: Range[];
+	links: LinkPart[];
 }
 
 interface AsymmetricType {
@@ -71,7 +82,7 @@ const SYMMETRIC_FAMILY: Readonly<Record<string, PairFamily>> = {
 };
 
 const BARE_URL = /[a-z][a-z0-9+.-]*:\/\/[^\s<>]*[^\s<>.,;:!?"'”’)\]*_~]/gi;
-const MARKDOWN_LINK = /!?\[[^[\]\n]*\]\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\)/g;
+const MARKDOWN_LINK = /(!?)\[([^[\]\n]*)\]\(([^()\n]*(?:\([^()\n]*\)[^()\n]*)*)\)/g;
 const WIKI_LINK = /!?\[\[[^[\]\n]+?\]\]/g;
 const DISPLAY_MATH = /\$\$[\s\S]+?\$\$/g;
 // No lookbehind anywhere: it is a syntax error on iOS before 16.4.
@@ -86,46 +97,86 @@ export function scanPairs(text: string, prose: boolean): PairScan {
 function scanProse(text: string): PairScan {
 	const chars = text.split('');
 	const pairs: Pair[] = [];
-	const links: Range[] = [];
+	const links: LinkPart[] = [];
 	const mask = (from: number, to: number) => {
 		for (let i = from; i < to; i++) {
 			if (chars[i] !== '\n') chars[i] = 'x';
 		}
 	};
-	const each = (pattern: RegExp, fn: (from: number, to: number, match: string) => void) => {
+	const each = (pattern: RegExp, fn: (match: RegExpExecArray) => void) => {
 		const current = chars.join('');
 		pattern.lastIndex = 0;
-		for (const match of current.matchAll(pattern)) {
-			fn(match.index, match.index + match[0].length, match[0]);
-		}
+		for (const match of current.matchAll(pattern)) fn(match);
 	};
 
-	each(ESCAPE, (from, to) => mask(from, to));
+	each(ESCAPE, (m) => mask(m.index, m.index + m[0].length));
 	findCodeSpans(chars, pairs, mask);
-	each(DISPLAY_MATH, (from, to) => {
-		pairs.push(makePair(text, from, from + 2, to - 2, to, 'math'));
-		mask(from, to);
+	each(DISPLAY_MATH, (m) => {
+		const to = m.index + m[0].length;
+		pairs.push(makePair(text, m.index, m.index + 2, to - 2, to, 'math'));
+		mask(m.index, to);
 	});
-	each(INLINE_MATH, (from, to) => {
-		pairs.push(makePair(text, from, from + 1, to - 1, to, 'math'));
-		mask(from, to);
+	each(INLINE_MATH, (m) => {
+		const to = m.index + m[0].length;
+		pairs.push(makePair(text, m.index, m.index + 1, to - 1, to, 'math'));
+		mask(m.index, to);
 	});
-	each(WIKI_LINK, (from, to, match) => {
-		const openTo = from + (match.startsWith('!') ? 3 : 2);
-		pairs.push(makePair(text, from, openTo, to - 2, to, 'link'));
-		mask(from, to);
+	each(WIKI_LINK, (m) => {
+		wikiLink(text, m.index, m.index + m[0].length, pairs, links);
+		mask(m.index, m.index + m[0].length);
 	});
-	each(MARKDOWN_LINK, (from, to, match) => {
-		links.push({ from, to });
-		// Keep `[text]` visible for bracket matching, hide the target.
-		mask(from + match.indexOf('](') + 1, to);
-	});
-	each(BARE_URL, (from, to) => mask(from, to));
+	each(MARKDOWN_LINK, (m) => markdownLink(text, m, pairs, links, mask));
+	each(BARE_URL, (m) => mask(m.index, m.index + m[0].length));
 
 	const masked = chars.join('');
 	matchDelimiters(masked, text, pairs);
 	pairs.sort((a, b) => a.from - b.from || b.to - a.to);
 	return { pairs, masked, links };
+}
+
+/** `[[target|text]]`, and `![[…]]` embeds as one step larger. */
+function wikiLink(text: string, from: number, to: number, pairs: Pair[], links: LinkPart[]): void {
+	const embed = text.charAt(from) === '!';
+	const start = embed ? from + 1 : from;
+	pairs.push(makePair(text, start, start + 2, to - 2, to, 'link'));
+	if (embed) links.push({ kind: 'link', label: 'Including ![[…]]', from, to });
+	const bar = text.indexOf('|', start + 2);
+	if (bar >= 0 && bar < to - 2) {
+		// In tables the separator is escaped: [[target\|text]]
+		const targetEnd = text.charAt(bar - 1) === '\\' ? bar - 1 : bar;
+		links.push({ kind: 'link-part', key: 'target', label: 'Link target', from: start + 2, to: targetEnd });
+		links.push({ kind: 'link-part', key: 'text', label: 'Link text', from: bar + 1, to: to - 2 });
+	}
+}
+
+/** `[text](url)`: the text, the URL, the whole link, and for images `![…](…)` as one step larger. */
+function markdownLink(
+	text: string,
+	match: RegExpExecArray,
+	pairs: Pair[],
+	links: LinkPart[],
+	mask: (from: number, to: number) => void,
+): void {
+	const image = match[1] === '!';
+	const start = match.index + match[1]!.length;
+	const textFrom = start + 1;
+	const textTo = textFrom + match[2]!.length;
+	const to = match.index + match[0].length;
+	pairs.push({
+		...makePair(text, start, textFrom, textTo, to, 'link'),
+		innerLabel: image ? 'Image description' : 'Link text',
+		outerLabel: 'Link',
+	});
+	if (image) links.push({ kind: 'link', label: 'Image', from: match.index, to });
+	const destination = /^\s*(?:<([^>]*)>|(\S+))/.exec(match[3]!);
+	if (destination) {
+		const url = destination[1] ?? destination[2]!;
+		const urlFrom = textTo + 2 + destination[0].length - url.length - (destination[1] === undefined ? 0 : 1);
+		links.push({ kind: 'link-part', key: 'url', label: 'Link URL', from: urlFrom, to: urlFrom + url.length });
+	}
+	// Hide the brackets and the target; keep the link text visible.
+	mask(match.index, textFrom);
+	mask(textTo, to);
 }
 
 function findCodeSpans(

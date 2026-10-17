@@ -1,0 +1,93 @@
+/* Picker: the list of selection steps next to the cursor. */
+.smart-select-picker {
+	position: fixed;
+	z-index: var(--layer-menu);
+	min-width: 280px;
+	max-width: min(520px, calc(100vw - 16px));
+	padding: var(--size-2-2);
+	background-color: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-s);
+	font-size: var(--font-ui-small);
+	outline: none;
+}
+
+.smart-select-picker-list {
+	display: grid;
+	grid-template-columns: 1.2em max-content minmax(0, 1fr);
+	column-gap: var(--size-4-3);
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+/* Rows share the list's columns, so labels and previews line up. */
+.smart-select-picker-item {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: subgrid;
+	align-items: baseline;
+	padding: var(--size-2-2) var(--size-4-2);
+	border-radius: var(--radius-s);
+	cursor: var(--cursor);
+}
+
+.smart-select-picker-item.is-selected {
+	background-color: var(--background-modifier-hover);
+}
+
+.smart-select-picker-key {
+	color: var(--text-faint);
+	font-family: var(--font-monospace);
+	text-align: right;
+}
+
+.smart-select-picker-label {
+	color: var(--text-normal);
+}
+
+.smart-select-picker-preview {
+	overflow: hidden;
+	color: var(--text-muted);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.smart-select-picker-hint {
+	margin-top: var(--size-2-2);
+	padding: var(--size-2-2) var(--size-4-2) 0;
+	border-top: 1px solid var(--background-modifier-border);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	white-space: pre;
+}
+
+.is-mobile .smart-select-picker-hint {
+	display: none;
+}
+
+/* Abbreviations: removable tags. */
+.smart-select-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	padding: var(--size-4-2) 0;
+}
+
+.smart-select-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: var(--size-2-1) var(--size-2-1) var(--size-2-1) var(--size-4-2);
+	border-radius: var(--radius-l);
+	background-color: var(--background-modifier-hover);
+	font-size: var(--font-ui-small);
+}
+
+.smart-select-tag-remove.clickable-icon {
+	padding: var(--size-2-1);
+}
+
+.smart-select-tags-empty {
+	color: var(--text-muted);
+}

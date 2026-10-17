@@ -85,6 +85,19 @@ export function shrinkSelection(analysis: Analysis, selection: Range, head: numb
 	return inside[inside.length - 1] ?? null;
 }
 
+/**
+ * The whole line a selection is on, from the first column to the end, or null when the
+ * selection spans several lines or the line is empty.
+ */
+export function lineAround(analysis: Analysis, selection: Range): Unit | null {
+	const structure = analysis.structure;
+	const first = structure.lineAt(selection.from);
+	if (structure.lineAt(selection.to) !== first) return null;
+	const line = structure.lines[first]!;
+	if (line.kind === 'blank') return null;
+	return { kind: 'line', key: 'whole', label: 'Line', from: line.from, to: line.to };
+}
+
 /** What kind of unit a selection is, for "next/previous of the same kind". */
 export function referenceOf(analysis: Analysis, selection: Range): Reference | null {
 	if (selection.from === selection.to) return { kind: 'word' };

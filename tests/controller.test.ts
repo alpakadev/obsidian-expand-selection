@@ -61,6 +61,16 @@ class FakeEditor {
 		this.scrolledTo = range;
 	}
 
+	scrollTop = 0;
+
+	getScrollInfo() {
+		return { top: this.scrollTop, left: 0, height: 1000, width: 500, clientHeight: 500, clientWidth: 500 };
+	}
+
+	scrollTo(_x?: number | null, y?: number | null): void {
+		if (typeof y === 'number') this.scrollTop = y;
+	}
+
 	selected(): string[] {
 		return this.selections.map((s) =>
 			this.text.slice(Math.min(s.anchor, s.head), Math.max(s.anchor, s.head)),
@@ -162,6 +172,15 @@ describe('selection controller', () => {
 		controller.selectSibling(changed as unknown as Editor, 1);
 		// Without the remembered kind, the bold sentence counts as bold text: no more of it follows.
 		assert.deepEqual(changed.selected(), ['Bold sentence here.']);
+	});
+
+	it('keeps the view where it is when expanding', () => {
+		const { editor, controller, asEditor } = setup(cursor(TEXT.indexOf('Intro') + 1));
+		editor.scrollTop = 40;
+		controller.expand(asEditor);
+		controller.expand(asEditor);
+		assert.equal(editor.scrollTop, 40);
+		assert.equal(editor.scrolledTo, null);
 	});
 
 	it('reports when there is nothing to do', () => {

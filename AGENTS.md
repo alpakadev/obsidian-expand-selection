@@ -9,14 +9,15 @@ Commands that expand, shrink and move the editor selection by Markdown-aware uni
     - `pairs.ts` matches quotes, brackets and Markdown formatting; `inline.ts` finds words, sentences, clauses and pair units inside one text block.
     - `analysis.ts` combines both into `stepsAround(range)`: every unit containing a range, smallest first, deduplicated by `KIND_PRIORITY` in `types.ts`.
     - `operations.ts` implements the commands: expand, shrink, the step list for the picker, next/previous of the same kind, next/previous enclosed text.
-    - `abbreviations.ts` holds the default abbreviations and helpers to edit the list.
+    - `abbreviations.ts` holds the abbreviation lists per language (English and German built in) and helpers to edit them.
 - `src/editor/` — the Obsidian side: `controller.ts` applies operations to every cursor, `history.ts` remembers the steps for shrinking and the kind of the last unit for next/previous, `status.ts` shows the unit name in the status bar.
 - `src/ui/` — `picker.ts` is the step list shown by **Choose what to select**, `abbreviations-modal.ts` edits the abbreviations.
 - `src/commands.ts` registers the commands. `src/settings-data.ts` holds the settings and reads saved data (no Obsidian imports, so it is testable); `src/settings.ts` is the settings tab.
 
 Rules for this codebase:
 
-- Command IDs (`expand-selection`, `shrink-selection`, `choose-selection`, `select-next-unit`, `select-previous-unit`, `select-next-enclosed`, `select-previous-enclosed`) are stable API. Don't rename them. Don't add default hotkeys.
+- Command IDs (`expand-selection`, `shrink-selection`, `choose-selection`, `select-next-unit`, `select-previous-unit`, `select-next-enclosed`, `select-previous-enclosed`) are stable API. Don't rename them. Don't add default hotkeys. Command *names* may change, but Obsidian lists them alphabetically in **Settings → Hotkeys**, so keep names that sort the main command first and opposites together (Choose…, Expand…, Reduce…, `Select same kind: next/previous`, `Select text in quotes…: next/previous`).
+- `src/editor/selections.ts` sets selections directly on CodeMirror without scrolling (Obsidian's `setSelections` scrolls), and `keepSelections` undoes Live Preview widening a selection over hidden `**` marks. Use `setSelections`/`apply` there instead of `editor.setSelections`.
 - Don't use regex lookbehind (`(?<=`, `(?<!`): it is a syntax error on iOS before 16.4 and would break the plugin on mobile. The linter checks this.
 - Add a test in `tests/` for every behavior change. `npm test` bundles `tests/*.test.ts` with esbuild and runs them with `node --test`; `tests/helpers.ts` marks the cursor with `¦` and a selection with `«…»`.
 - When two units cover the same text, `KIND_PRIORITY` decides which one it is. Visible markup (formatting, quotes, links) wins over sentences. While stepping with next/previous, the controller passes the kind of the last unit along, so the priority only matters for selections made by hand and for expansion steps.

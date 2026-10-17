@@ -1,83 +1,131 @@
-import { App, Modal, Setting, TextComponent, setIcon } from 'obsidian';
+import { App, Modal, Setting, setIcon } from 'obsidian';
 import {
-	DEFAULT_ABBREVIATIONS,
-	mergeAbbreviations,
+	AbbreviationList,
+	addAbbreviations,
+	defaultAbbreviationLists,
+	isBuiltInLanguage,
 	parseAbbreviationInput,
+	sameWord,
 } from '../core/abbreviations';
 
-/** Edits the abbreviations as removable tags with a field to add new ones. Changes are saved right away. */
+const quote = (words: string[]) => words.map((word) => `“${word}”`).join(', ');
+
+/**
+ * Edits the abbreviations, one list per language. Words are removable tags; typing a word
+ * that is already in the list says so and points at it. Every change is saved right away.
+ */
 export class AbbreviationsModal extends Modal {
-	private words: string[];
-	private tags: HTMLElement | null = null;
+	private lists: AbbreviationList[];
+	private selected = 0;
+	private message: { text: string; warning: boolean } | null = null;
+	private flash: string[] = [];
+	private focusAdd = false;
 
 	constructor(
 		app: App,
-		words: readonly string[],
-		private readonly save: (words: string[]) => Promise<void>,
+		lists: readonly AbbreviationList[],
+		private readonly save: (lists: AbbreviationList[]) => Promise<void>,
 	) {
 		super(app);
-		this.words = mergeAbbreviations([], words);
+		this.lists = lists.map((list) => ({ ...list, words: [...list.words] }));
 	}
 
 	onOpen(): void {
-		const { contentEl } = this;
 		this.titleEl.setText('Abbreviations');
-		contentEl.createEl('p', {
-			cls: 'setting-item-description',
-			text: 'A period after these words does not end the sentence.',
-		});
-
-		let input: TextComponent | null = null;
-		const add = async () => {
-			if (!input) return;
-			const added = parseAbbreviationInput(input.getValue());
-			input.setValue('');
-			if (added.length === 0) return;
-			await this.change(mergeAbbreviations(this.words, added));
-		};
-		new Setting(contentEl)
-			.setName('Add')
-			.setDesc('Type one or more, separated by spaces.')
-			.addText((text) => {
-				input = text;
-				text.setPlaceholder('For example: etc.');
-				text.inputEl.addEventListener('keydown', (event) => {
-					if (event.key !== 'Enter') return;
-					event.preventDefault();
-					void add();
-				});
-			})
-			.addButton((button) => button.setButtonText('Add').setCta().onClick(() => void add()));
-
-		this.tags = contentEl.createDiv({ cls: 'smart-select-tags' });
 		this.render();
-
-		new Setting(contentEl).addButton((button) =>
-			button
-				.setButtonText('Restore defaults')
-				.onClick(() => void this.change(mergeAbbreviations([], DEFAULT_ABBREVIATIONS))),
-		);
 	}
 
 	onClose(): void {
 		this.contentEl.empty();
 	}
 
-	private async change(words: string[]): Promise<void> {
-		this.words = words;
-		this.render();
-		await this.save([...words]);
-	}
-
 	private render(): void {
-		const tags = this.tags;
-		if (!tags) return;
-		tags.empty();
-		if (this.words.length === 0) {
-			tags.createSpan({ cls: 'smart-select-tags-empty', text: 'No abbreviations.' });
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.addClass('smart-select-abbreviations');
+		contentEl.createEl('p', {
+			cls: 'setting-item-description',
+			text: 'A period after these words does not end the sentence. Keep a list for each language you write in.',
+		});
+		if (this.lists.length === 0) this.lists = defaultAbbreviationLists();
+		this.selected = Math.min(this.selected, this.lists.length - 1);
+		const list = this.lists[this.selected]!;
+
+		const language = new Setting(contentEl).setName('Language').addDropdown((dropdown) => {
+			for (const [i, l] of this.lists.entries()) {
+				dropdown.addOption(String(i), `${l.language} (${l.words.length})`);
+			}
+			dropdown.setValue(String(this.selected)).onChange((value) => {
+				this.selected = Number(value);
+				this.message = null;
+				this.render();
+			});
+		});
+		if (!isBuiltInLanguage(list.language)) {
+			language.addExtraButton((button) =>
+				button
+					.setIcon('trash-2')
+					.setTooltip(`Remove ${list.language}`)
+					.onClick(() => {
+						this.lists.splice(this.selected, 1);
+						this.selected = 0;
+						this.message = { text: `Removed ${list.language}.`, warning: false };
+						void this.commit();
+					}),
+			);
 		}
-		for (const word of this.words) {
+
+		new Setting(contentEl)
+			.setName(`Use ${list.language} abbreviations`)
+			.setDesc('Turn off for languages you do not write in.')
+			.addToggle((toggle) =>
+				toggle.setValue(list.enabled).onChange((value) => {
+					list.enabled = value;
+					void this.commit(false);
+				}),
+			);
+
+		const add = new Setting(contentEl).setName('Add').setDesc('Type one or more, separated by spaces.');
+		let typed = '';
+		const submit = () => {
+			const words = parseAbbreviationInput(typed);
+			if (words.length === 0) return;
+			const result = addAbbreviations(list.words, words);
+			list.words = result.words;
+			this.flash = result.duplicates;
+			this.message = this.describe(result.added, result.duplicates);
+			this.focusAdd = true;
+			void this.commit();
+		};
+		add.addText((text) => {
+			text.setPlaceholder('For example: etc.').onChange((value) => (typed = value));
+			text.inputEl.addEventListener('keydown', (event) => {
+				if (event.key !== 'Enter') return;
+				event.preventDefault();
+				submit();
+			});
+			if (this.focusAdd) {
+				this.focusAdd = false;
+				window.setTimeout(() => text.inputEl.focus(), 0);
+			}
+		});
+		add.addButton((button) => button.setButtonText('Add').setCta().onClick(submit));
+
+		if (this.message) {
+			contentEl.createDiv({
+				cls: ['smart-select-message', this.message.warning ? 'mod-warning' : ''].filter(Boolean),
+				text: this.message.text,
+				attr: { role: 'status', 'aria-live': 'polite' },
+			});
+		}
+
+		const tags = contentEl.createDiv({ cls: 'smart-select-tags' });
+		if (list.words.length === 0) {
+			tags.createSpan({ cls: 'smart-select-tags-empty', text: `No ${list.language} abbreviations yet.` });
+		}
+		for (const word of list.words) {
 			const tag = tags.createDiv({ cls: 'smart-select-tag' });
+			if (this.flash.includes(word)) tag.addClass('is-flashing');
 			tag.createSpan({ text: word });
 			const remove = tag.createEl('button', {
 				cls: 'smart-select-tag-remove clickable-icon',
@@ -85,8 +133,64 @@ export class AbbreviationsModal extends Modal {
 			});
 			setIcon(remove, 'x');
 			remove.addEventListener('click', () => {
-				void this.change(this.words.filter((w) => w !== word));
+				list.words = list.words.filter((w) => w !== word);
+				this.message = { text: `Removed “${word}”.`, warning: false };
+				void this.commit();
 			});
 		}
+		this.flash = [];
+
+		let newLanguage = '';
+		const addLanguage = () => {
+			const name = newLanguage.trim();
+			if (!name) return;
+			const existing = this.lists.findIndex((l) => sameWord(l.language, name));
+			if (existing >= 0) {
+				this.selected = existing;
+				this.message = { text: `${this.lists[existing]!.language} is already in the list.`, warning: true };
+			} else {
+				this.lists.push({ language: name, words: [], enabled: true });
+				this.selected = this.lists.length - 1;
+				this.message = { text: `Added ${name}. Now add its abbreviations.`, warning: false };
+				this.focusAdd = true;
+			}
+			void this.commit();
+		};
+		new Setting(contentEl)
+			.setName('Add a language')
+			.addText((text) => {
+				text.setPlaceholder('For example: French').onChange((value) => (newLanguage = value));
+				text.inputEl.addEventListener('keydown', (event) => {
+					if (event.key !== 'Enter') return;
+					event.preventDefault();
+					addLanguage();
+				});
+			})
+			.addButton((button) => button.setButtonText('Add language').onClick(addLanguage));
+
+		new Setting(contentEl)
+			.setName('Restore built-in lists')
+			.setDesc('Brings back the words that come with the plugin. Languages you added stay.')
+			.addButton((button) =>
+				button.setButtonText('Restore').onClick(() => {
+					const custom = this.lists.filter((l) => !isBuiltInLanguage(l.language));
+					this.lists = [...defaultAbbreviationLists(), ...custom];
+					this.message = { text: 'Restored English and German.', warning: false };
+					void this.commit();
+				}),
+			);
+	}
+
+	private describe(added: string[], duplicates: string[]): { text: string; warning: boolean } {
+		const parts: string[] = [];
+		if (added.length > 0) parts.push(`Added ${quote(added)}.`);
+		if (duplicates.length === 1) parts.push(`${quote(duplicates)} is already in the list.`);
+		if (duplicates.length > 1) parts.push(`${quote(duplicates)} are already in the list.`);
+		return { text: parts.join(' '), warning: duplicates.length > 0 };
+	}
+
+	private async commit(rerender = true): Promise<void> {
+		if (rerender) this.render();
+		await this.save(this.lists.map((list) => ({ ...list, words: [...list.words] })));
 	}
 }

@@ -67,6 +67,16 @@
 }
 
 /* Abbreviations: removable tags. */
+.smart-select-message {
+	margin: calc(-1 * var(--size-2-2)) 0 var(--size-2-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.smart-select-message.mod-warning {
+	color: var(--text-warning);
+}
+
 .smart-select-tags {
 	display: flex;
 	flex-wrap: wrap;
@@ -86,6 +96,17 @@
 
 .smart-select-tag-remove.clickable-icon {
 	padding: var(--size-2-1);
+}
+
+.smart-select-tag.is-flashing {
+	animation: smart-select-flash 1.2s ease-out;
+	box-shadow: 0 0 0 2px var(--text-warning);
+}
+
+@keyframes smart-select-flash {
+	from {
+		background-color: var(--background-modifier-error);
+	}
 }
 
 .smart-select-tags-empty {

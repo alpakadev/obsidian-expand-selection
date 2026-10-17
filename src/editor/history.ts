@@ -1,10 +1,5 @@
 import type { Reference } from '../core/types';
-
-/** A selection as document offsets. */
-export interface OffsetSelection {
-	anchor: number;
-	head: number;
-}
+import { OffsetSelection, sameSelections } from './selections';
 
 /** The selections of an editor, the label shown for them, and what kind of unit each one is. */
 export interface Snapshot {
@@ -31,13 +26,8 @@ export class SelectionHistory {
 	/** The current snapshot, if the editor still shows what the last command selected. */
 	matching(text: string, selections: OffsetSelection[]): Snapshot | null {
 		const current = this.current;
-		if (!current || text !== this.text || current.selections.length !== selections.length) {
-			return null;
-		}
-		const same = current.selections.every(
-			(s, i) => s.anchor === selections[i]!.anchor && s.head === selections[i]!.head,
-		);
-		return same ? current : null;
+		if (!current || text !== this.text) return null;
+		return sameSelections(current.selections, selections) ? current : null;
 	}
 
 	/** Records a step from `before` to `after`; continues the history if `before` is its current state. */

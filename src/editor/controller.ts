@@ -1,4 +1,3 @@
-import type { EditorView } from '@codemirror/view';
 import type { Editor } from 'obsidian';
 import { Analysis } from '../core/analysis';
 import {
@@ -11,7 +10,18 @@ import {
 } from '../core/operations';
 import { Range, Reference, SelectionOptions, Unit, sameRange } from '../core/types';
 import { PickerAnchor, SelectionPicker } from '../ui/picker';
-import { OffsetSelection, SelectionHistory, Snapshot, snapshotOf } from './history';
+import { SelectionHistory, Snapshot, snapshotOf } from './history';
+import {
+	OffsetSelection,
+	Scroll,
+	editorView,
+	keepSelections,
+	mainIndex,
+	orient,
+	readSelections,
+	setSelections,
+	toRange,
+} from './selections';
 
 /** Tells the user what was selected. */
 export interface SelectionFeedback {
@@ -34,6 +44,8 @@ type Step = (
 export class SelectionController {
 	private readonly history = new SelectionHistory();
 	private readonly picker = new SelectionPicker();
+	/** Counts selection changes, so a late check of an older one does nothing. */
+	private changes = 0;
 
 	constructor(
 		private readonly options: () => SelectionOptions,
@@ -52,7 +64,7 @@ export class SelectionController {
 		const text = editor.getValue();
 		const previous = this.history.pop(text, readSelections(editor));
 		if (previous) {
-			this.apply(editor, previous.selections, mainIndex(editor, previous.selections));
+			this.apply(editor, previous.selections, mainIndex(editor, previous.selections), 'keep', previous.label);
 			this.history.update(readSelections(editor));
 			if (previous.label) this.feedback.show(previous.label);
 			else this.feedback.clear();
@@ -93,7 +105,7 @@ export class SelectionController {
 		}
 		let moved = false;
 		const show = (unit: Unit) => {
-			this.apply(editor, [orient(main, unit)], 0);
+			this.apply(editor, [orient(main, unit)], 0, 'keep', unit.label);
 			this.feedback.show(unit.label);
 		};
 		const items = () => steps.map((unit) => ({ label: unit.label, preview: preview(text, unit) }));
@@ -120,7 +132,7 @@ export class SelectionController {
 				}
 				this.picker.update(items(), index);
 				show(steps[index]!);
-				editor.scrollIntoView(toEditorRange(editor, next));
+				setSelections(editor, readSelections(editor), 0, 'reveal');
 				window.requestAnimationFrame(() => this.picker.place(anchorAt(editor, next.from)));
 			},
 			choose: (i) => {
@@ -142,7 +154,7 @@ export class SelectionController {
 				editor.focus();
 			},
 			cancel: (refocus) => {
-				this.apply(editor, original, mainIndex(editor, original));
+				this.apply(editor, original, mainIndex(editor, original), 'keep');
 				this.feedback.clear();
 				if (refocus) editor.focus();
 			},
@@ -173,7 +185,8 @@ export class SelectionController {
 			return unit ? orient(selection, unit) : selection;
 		});
 
-		this.apply(editor, next, main);
+		const label = units[main]?.label ?? null;
+		this.apply(editor, next, main, mode === 'jump' ? 'reveal' : 'keep', label);
 		const after = readSelections(editor);
 		// The editor merges overlapping selections; then the kinds no longer line up.
 		const references =
@@ -182,60 +195,33 @@ export class SelectionController {
 						unit ? { kind: unit.kind, key: unit.key } : (previous?.references[i] ?? null),
 					)
 				: after.map(() => null);
-		const label = units[main]?.label ?? null;
 		const snapshot: Snapshot = { selections: after, label, references };
 		if (mode === 'expand') this.history.push(text, previous ?? snapshotOf(selections), snapshot);
 		else this.history.reset(text, snapshot);
 		if (label) this.feedback.show(label);
 		else this.feedback.clear();
-
-		const target = units[main];
-		if (mode === 'jump' && target) editor.scrollIntoView(toEditorRange(editor, target));
 	}
 
-	private apply(editor: Editor, selections: OffsetSelection[], main: number): void {
-		this.feedback.quietly(() =>
-			editor.setSelections(
-				selections.map((s) => ({
-					anchor: editor.offsetToPos(s.anchor),
-					head: editor.offsetToPos(s.head),
-				})),
-				Math.min(main, selections.length - 1),
-			),
+	/** Sets the selections and keeps them exact, even if Live Preview widens them over hidden marks. */
+	private apply(
+		editor: Editor,
+		selections: OffsetSelection[],
+		main: number,
+		scroll: Scroll,
+		label: string | null = null,
+	): void {
+		const change = ++this.changes;
+		this.feedback.quietly(() => setSelections(editor, selections, main, scroll));
+		keepSelections(
+			editor,
+			selections,
+			() => {
+				this.feedback.quietly(() => setSelections(editor, selections, main, 'keep'));
+				if (label) this.feedback.show(label);
+			},
+			() => change === this.changes,
 		);
 	}
-}
-
-function readSelections(editor: Editor): OffsetSelection[] {
-	return editor.listSelections().map((s) => ({
-		anchor: editor.posToOffset(s.anchor),
-		head: editor.posToOffset(s.head),
-	}));
-}
-
-/** Index of the main selection: the one whose head is the editor's cursor. */
-function mainIndex(editor: Editor, selections: OffsetSelection[]): number {
-	const head = editor.posToOffset(editor.getCursor('head'));
-	const index = selections.findIndex((s) => s.head === head);
-	return index >= 0 ? index : selections.length - 1;
-}
-
-function toRange(selection: OffsetSelection): Range {
-	return {
-		from: Math.min(selection.anchor, selection.head),
-		to: Math.max(selection.anchor, selection.head),
-	};
-}
-
-function toEditorRange(editor: Editor, range: Range) {
-	return { from: editor.offsetToPos(range.from), to: editor.offsetToPos(range.to) };
-}
-
-/** Keeps the direction of a backward selection, so the cursor stays on the side it was on. */
-function orient(previous: OffsetSelection, range: Range): OffsetSelection {
-	return previous.anchor > previous.head
-		? { anchor: range.to, head: range.from }
-		: { anchor: range.from, head: range.to };
 }
 
 /** One line of text for the picker: whitespace collapsed, long text shortened in the middle at word breaks. */
@@ -249,8 +235,7 @@ function preview(text: string, range: Range): string {
 
 /** Screen position of a document offset, from CodeMirror when available. */
 function anchorAt(editor: Editor, offset: number): PickerAnchor {
-	const view = (editor as unknown as { cm?: EditorView }).cm;
-	const coords = view?.coordsAtPos?.(offset);
+	const coords = editorView(editor)?.coordsAtPos(offset);
 	if (coords) return { left: coords.left, top: coords.top, bottom: coords.bottom };
 	const selection = activeWindow.getSelection();
 	const rect = selection && selection.rangeCount > 0 ? selection.getRangeAt(0).getBoundingClientRect() : null;

@@ -45,22 +45,28 @@ export function readSettings(data: unknown): SmartSelectSettings {
 	return settings;
 }
 
+/** Saved abbreviations in any earlier format, or null to use the built-in lists. */
 function readAbbreviations(value: unknown): AbbreviationList[] | null {
 	if (typeof value === 'string') return splitIntoLanguages(parseAbbreviationInput(value));
 	if (!Array.isArray(value)) return null;
-	if (value.every((item) => typeof item === 'string')) return splitIntoLanguages(value);
 	const lists: AbbreviationList[] = [];
+	const loose: string[] = [];
 	for (const item of value as unknown[]) {
+		if (typeof item === 'string') {
+			loose.push(item);
+			continue;
+		}
 		if (!item || typeof item !== 'object') continue;
 		const { language, words, enabled } = item as Record<string, unknown>;
-		if (typeof language !== 'string' || !Array.isArray(words)) continue;
+		if (typeof language !== 'string' || !language.trim() || !Array.isArray(words)) continue;
 		lists.push({
 			language,
 			words: words.filter((word): word is string => typeof word === 'string'),
 			enabled: enabled !== false,
 		});
 	}
-	return lists;
+	if (loose.length > 0) lists.push(...splitIntoLanguages(loose));
+	return lists.length > 0 ? lists : null;
 }
 
 export function toOptions(settings: SmartSelectSettings): SelectionOptions {

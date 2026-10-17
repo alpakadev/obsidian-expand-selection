@@ -115,10 +115,10 @@ export function widenedOverMarkup(
 }
 
 /**
- * Puts the intended selection back if the editor widened it over formatting marks, right away
- * and again once the editor has redrawn (by then the marks are shown, so it stays).
- * `current` must turn false as soon as a newer selection was set, so a late check never
- * undoes it.
+ * Puts the intended selection back if the editor widened it over formatting marks: right away,
+ * after the editor's next redraw (by then the marks are shown, so it stays) and once more shortly
+ * after. The checks stop after a short time and as soon as `current` turns false (a newer
+ * selection was set), so they never undo something the user did later.
  */
 export function keepSelections(
 	editor: Editor,
@@ -126,12 +126,16 @@ export function keepSelections(
 	reapply: () => void,
 	current: () => boolean,
 ): void {
+	const deadline = performance.now() + 300;
 	const check = () => {
-		if (!current()) return;
+		if (!current() || performance.now() > deadline) return;
 		if (widenedOverMarkup(editor.getValue(), readSelections(editor), intended)) reapply();
 	};
 	check();
 	if (typeof window === 'undefined') return; // unit tests
-	window.requestAnimationFrame(check);
+	const view = editorView(editor);
+	// The editor's own redraw, which also runs in popout windows.
+	if (view) view.requestMeasure({ read: check });
+	else window.requestAnimationFrame(check);
 	window.setTimeout(check, 120);
 }

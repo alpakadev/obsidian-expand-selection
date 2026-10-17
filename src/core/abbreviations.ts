@@ -31,6 +31,36 @@ export function defaultAbbreviationLists(): AbbreviationList[] {
 	}));
 }
 
+/**
+ * Adds back the built-in words the user removed. Keeps words the user added, which lists are
+ * turned on, and the languages the user added. Returns how many words came back.
+ */
+export function restoreBuiltIn(lists: readonly AbbreviationList[]): { lists: AbbreviationList[]; restored: number } {
+	let restored = 0;
+	const result = lists.map((list) => ({ ...list, words: [...list.words] }));
+	for (const builtIn of BUILT_IN_ABBREVIATIONS) {
+		const list = result.find((l) => sameWord(l.language, builtIn.language));
+		if (!list) {
+			result.push({ language: builtIn.language, words: sortWords(builtIn.words), enabled: true });
+			restored += builtIn.words.length;
+			continue;
+		}
+		const added = addAbbreviations(list.words, builtIn.words);
+		list.words = added.words;
+		restored += added.added.length;
+	}
+	return { lists: result, restored };
+}
+
+/** Other lists that are turned on and contain the word. */
+export function otherListsWith(
+	lists: readonly AbbreviationList[],
+	except: AbbreviationList,
+	word: string,
+): AbbreviationList[] {
+	return lists.filter((l) => l !== except && l.enabled && l.words.some((w) => sameWord(w, word)));
+}
+
 export function isBuiltInLanguage(language: string): boolean {
 	return BUILT_IN_ABBREVIATIONS.some((list) => sameWord(list.language, language));
 }

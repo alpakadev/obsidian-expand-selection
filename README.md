@@ -120,7 +120,7 @@ From small to large — steps that would select the same text are skipped:
 ## Settings
 
 - **Expansion steps**: turn off steps you don't want to stop at — compound words, parts of sentences, sentences without final punctuation, lines, heading sections.
-- **Abbreviations**: words ending with a period that don't end a sentence, one list per language. **Edit** opens them: pick a language, add words (it tells you when a word is already there), remove a word with its ×, turn a language off, or **Add a language** of your own. English and German come filled in; **Restore** brings their words back.
+- **Abbreviations**: words ending with a period that don't end a sentence, one list per language. **Edit** opens them: pick a language, add words (it tells you when a word is already there), remove a word with its ×, turn a language off, or **Add a language** of your own. English and German come filled in; **Restore** adds back built-in words you removed and keeps your own words, languages and on/off choices. Removing a word that another language you use still has tells you so.
 - **Show what is selected**: show the name of the selected unit in the status bar (desktop).
 
 ## Install

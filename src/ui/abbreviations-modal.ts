@@ -4,7 +4,9 @@ import {
 	addAbbreviations,
 	defaultAbbreviationLists,
 	isBuiltInLanguage,
+	otherListsWith,
 	parseAbbreviationInput,
+	restoreBuiltIn,
 	sameWord,
 } from '../core/abbreviations';
 
@@ -47,7 +49,10 @@ export class AbbreviationsModal extends Modal {
 			cls: 'setting-item-description',
 			text: 'A period after these words does not end the sentence. Keep a list for each language you write in.',
 		});
-		if (this.lists.length === 0) this.lists = defaultAbbreviationLists();
+		if (this.lists.length === 0) {
+			this.lists = defaultAbbreviationLists();
+			void this.save(this.lists.map((l) => ({ ...l, words: [...l.words] })));
+		}
 		this.selected = Math.min(this.selected, this.lists.length - 1);
 		const list = this.lists[this.selected]!;
 
@@ -134,7 +139,13 @@ export class AbbreviationsModal extends Modal {
 			setIcon(remove, 'x');
 			remove.addEventListener('click', () => {
 				list.words = list.words.filter((w) => w !== word);
-				this.message = { text: `Removed “${word}”.`, warning: false };
+				const others = otherListsWith(this.lists, list, word).map((l) => l.language);
+				this.message = others.length
+					? {
+							text: `Removed “${word}” from ${list.language}. ${others.join(' and ')} still has it, so a period after it still does not end a sentence.`,
+							warning: true,
+						}
+					: { text: `Removed “${word}”.`, warning: false };
 				void this.commit();
 			});
 		}
@@ -169,13 +180,16 @@ export class AbbreviationsModal extends Modal {
 			.addButton((button) => button.setButtonText('Add language').onClick(addLanguage));
 
 		new Setting(contentEl)
-			.setName('Restore built-in lists')
-			.setDesc('Brings back the words that come with the plugin. Languages you added stay.')
+			.setName('Restore built-in words')
+			.setDesc('Adds back the words that come with the plugin if you removed some. Your own words and languages stay.')
 			.addButton((button) =>
 				button.setButtonText('Restore').onClick(() => {
-					const custom = this.lists.filter((l) => !isBuiltInLanguage(l.language));
-					this.lists = [...defaultAbbreviationLists(), ...custom];
-					this.message = { text: 'Restored English and German.', warning: false };
+					const { lists, restored } = restoreBuiltIn(this.lists);
+					this.lists = lists;
+					this.message = {
+						text: restored === 0 ? 'Nothing to restore.' : `Restored ${restored} ${restored === 1 ? 'word' : 'words'}.`,
+						warning: false,
+					};
 					void this.commit();
 				}),
 			);

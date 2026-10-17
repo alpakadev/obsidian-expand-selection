@@ -9,9 +9,10 @@ Commands that expand, shrink and move the editor selection by Markdown-aware uni
     - `pairs.ts` matches quotes, brackets and Markdown formatting; `inline.ts` finds words, sentences, clauses and pair units inside one text block.
     - `analysis.ts` combines both into `stepsAround(range)`: every unit containing a range, smallest first, deduplicated by `KIND_PRIORITY` in `types.ts`.
     - `operations.ts` implements the commands: expand, shrink, the step list for the picker, next/previous of the same kind, next/previous enclosed text.
+    - `rows.ts` groups the steps into the picker's rows: one per thing, with a version without and with marks, plus the whole Line.
     - `abbreviations.ts` holds the abbreviation lists per language (English and German built in) and helpers to edit them.
-- `src/editor/` — the Obsidian side: `controller.ts` applies operations to every cursor, `history.ts` remembers the steps for shrinking and the kind of the last unit for next/previous, `status.ts` shows the unit name in the status bar.
-- `src/ui/` — `picker.ts` is the step list shown by **Choose what to select**, `abbreviations-modal.ts` edits the abbreviations.
+- `src/editor/` — the Obsidian side: `controller.ts` applies operations to every cursor, `picker-session.ts` runs one opening of the picker (previews, jumps, marks, viewport rules), `history.ts` remembers the steps for shrinking and the kind of the last unit for next/previous, `status.ts` shows the unit name in the status bar.
+- `src/ui/` — `picker.ts` draws the picker and turns keys and pointer input into session calls (it holds no selection logic), `abbreviations-modal.ts` edits the abbreviations.
 - `src/commands.ts` registers the commands. `src/settings-data.ts` holds the settings and reads saved data (no Obsidian imports, so it is testable); `src/settings.ts` is the settings tab.
 
 Rules for this codebase:

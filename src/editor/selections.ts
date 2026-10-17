@@ -1,4 +1,4 @@
-import { EditorSelection } from '@codemirror/state';
+import { EditorSelection, StateEffect } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import type { Editor } from 'obsidian';
 import type { Range } from '../core/types';
@@ -9,8 +9,26 @@ export interface OffsetSelection {
 	head: number;
 }
 
-/** How the selection change should move the view. */
-export type Scroll = 'keep' | 'reveal';
+/** Where the note is scrolled to, to come back to it exactly. */
+export interface ViewState {
+	top: number;
+	left: number;
+	/** CodeMirror's scroll snapshot, which survives Live Preview redrawing content above. */
+	snapshot: StateEffect<unknown> | null;
+}
+
+/**
+ * How a selection change moves the view: `keep` leaves it, `reveal` scrolls as little as needed,
+ * `restore` goes back to a saved view, `align` puts position `at` `y` pixels below the top.
+ */
+export type Scroll = 'keep' | 'reveal' | { restore: ViewState } | { align: number; at: number };
+
+export function viewState(editor: Editor): ViewState {
+	const info = editor.getScrollInfo();
+	const view = editorView(editor);
+	const snapshot = view && typeof view.scrollSnapshot === 'function' ? view.scrollSnapshot() : null;
+	return { top: info.top, left: info.left, snapshot };
+}
 
 export function readSelections(editor: Editor): OffsetSelection[] {
 	return editor.listSelections().map((s) => ({
@@ -68,11 +86,18 @@ export function setSelections(
 		const length = view.state.doc.length;
 		const clamp = (offset: number) => Math.max(0, Math.min(length, offset));
 		const ranges = selections.map((s) => EditorSelection.range(clamp(s.anchor), clamp(s.head)));
-		const target = ranges[index]!;
-		view.dispatch({
-			selection: EditorSelection.create(ranges, index),
-			effects: scroll === 'reveal' ? EditorView.scrollIntoView(target, { y: 'nearest' }) : [],
-		});
+		const effects: StateEffect<unknown>[] = [];
+		if (scroll === 'reveal') effects.push(EditorView.scrollIntoView(ranges[index]!, { y: 'nearest' }));
+		else if (typeof scroll === 'object' && 'align' in scroll) {
+			effects.push(EditorView.scrollIntoView(clamp(scroll.at), { y: 'start', yMargin: scroll.align }));
+		} else if (typeof scroll === 'object' && scroll.restore.snapshot) effects.push(scroll.restore.snapshot);
+		view.dispatch({ selection: EditorSelection.create(ranges, index), effects });
+		if (typeof scroll === 'object' && 'restore' in scroll && !scroll.restore.snapshot) {
+			const { top, left } = scroll.restore;
+			const put = () => view.scrollDOM.scrollTo(left, top);
+			put();
+			view.requestMeasure({ read: put });
+		}
 		return;
 	}
 	const before = editor.getScrollInfo();
@@ -81,11 +106,53 @@ export function setSelections(
 		index,
 	);
 	const target = toRange(selections[index]!);
-	if (scroll === 'reveal') {
+	if (scroll === 'reveal' || (typeof scroll === 'object' && 'align' in scroll)) {
 		editor.scrollIntoView({ from: editor.offsetToPos(target.from), to: editor.offsetToPos(target.to) });
+	} else if (typeof scroll === 'object') {
+		editor.scrollTo(scroll.restore.left, scroll.restore.top);
 	} else {
 		editor.scrollTo(before.left, before.top);
 	}
+}
+
+/** The scroll mode a late re-apply should use: back to the same saved view, otherwise no movement. */
+export function settledScroll(scroll: Scroll): Scroll {
+	return typeof scroll === 'object' && 'restore' in scroll ? scroll : 'keep';
+}
+
+/** Focuses the editor and puts the view back if focusing scrolled it. */
+export function focusKeepingScroll(editor: Editor): void {
+	const before = editor.getScrollInfo();
+	editor.focus();
+	const now = editor.getScrollInfo();
+	if (now.top !== before.top || now.left !== before.left) editor.scrollTo(before.left, before.top);
+}
+
+/**
+ * Whether a range is fully visible in the editor and not covered by `avoid` (the picker).
+ * Null when there is no CodeMirror view to measure with.
+ */
+export function rangeVisible(
+	editor: Editor,
+	range: Range,
+	avoid: { top: number; bottom: number } | null,
+): boolean | null {
+	const view = editorView(editor);
+	if (!view) return null;
+	const start = view.coordsAtPos(range.from);
+	const end = view.coordsAtPos(range.to, -1);
+	if (!start || !end) return false;
+	const box = view.scrollDOM.getBoundingClientRect();
+	if (start.top < box.top || end.bottom > box.bottom) return false;
+	return !avoid || end.bottom <= avoid.top || start.top >= avoid.bottom;
+}
+
+/** Top of the line at `offset`, in pixels below the top of the editor's scroll area. */
+export function lineTop(editor: Editor, offset: number): number | null {
+	const view = editorView(editor);
+	const coords = view?.coordsAtPos(offset);
+	if (!view || !coords) return null;
+	return coords.top - view.scrollDOM.getBoundingClientRect().top;
 }
 
 /** Characters Live Preview hides around formatted text. */

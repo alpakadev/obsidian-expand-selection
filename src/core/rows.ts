@@ -62,7 +62,12 @@ export function pickerRows(
 	const { steps } = stepsForSelection(analysis, sel, Math.min(head, sel.to));
 	const order = (unit: Range) => steps.findIndex((step) => sameRange(step, unit));
 	const point = analysis.snap(focusPoint(analysis, sel, head));
-	const units = analysis.unitsAround({ from: point, to: point }).filter((unit) => order(unit) >= 0);
+	const around = analysis.unitsAround({ from: point, to: point });
+	const units = around.filter((unit) => order(unit) >= 0);
+	// Expand reaches a longer list item through its first line with the bullet, around the
+	// item text; the item text is still the version of the list item without its bullet.
+	const itemText = around.find((u) => u.kind === 'block-content' && u.key === 'list' && order(u) < 0);
+	if (itemText && units.some((u) => u.kind === 'list-item' && u.to === itemText.to)) units.push(itemText);
 
 	let things = pairUp(units);
 	things = merged(things);
@@ -178,6 +183,9 @@ function pairUp(units: Unit[]): Thing[] {
 			case 'code-content':
 				wide = find((u) => u.kind === 'code-block' && containsRange(u, unit));
 				break;
+			case 'line':
+				wide = find((u) => u.kind === 'line' && u.to === unit.to && u.from < unit.from);
+				break;
 		}
 		if (wide) {
 			used.add(wide);
@@ -211,7 +219,8 @@ function withLine(things: Thing[], line: Unit): Thing[] {
 	if (twoVersions[0]) tight = twoVersions[0].tight;
 	else {
 		const inner = things.find((t) => t.wide.kind === 'line' && containsRange(line, t.wide) && !sameRange(line, t.wide));
-		if (inner) {
+		// An indented line with two versions (without and with its bullet) keeps a row of its own.
+		if (inner && sameRange(inner.tight, inner.wide)) {
 			tight = inner.wide;
 			absorbed.push(inner);
 		}
@@ -305,7 +314,8 @@ function rowLabel(text: string, thing: Thing): string {
 		case 'code-block':
 			return unit.label.startsWith('Properties') ? 'Properties' : 'Code block';
 		case 'line':
-			return 'Line';
+			// An indented first line of a list item without and with its bullet, apart from the whole line.
+			return sameRange(thing.tight, thing.wide) ? 'Line' : unit.label;
 		default:
 			return unit.label;
 	}

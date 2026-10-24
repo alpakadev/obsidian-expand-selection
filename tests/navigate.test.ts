@@ -33,14 +33,16 @@ describe('select next/previous unit of the same kind', () => {
 		]);
 	});
 
-	it('moves by sentences in a transcript without the timestamps', () => {
+	it('stops at labels like timestamps when moving by sentences', () => {
+		const note =
+			'- *8:50* Before just shows the Timestamp.\n*Somewhere* Before just shows t¦he word.\n**12:30** i want to first select the sentence.\n';
+		assert.deepEqual(siblings(note, 2, 3, -1), ['Somewhere', 'Before just shows the Timestamp', '8:50']);
+		assert.deepEqual(siblings(note, 2, 2), ['12:30', 'i want to first select the sentence']);
+		assert.deepEqual(siblings(note, 3, 2, -1), ['Somewhere', 'Before just shows the Timestamp.']);
 		const transcript =
 			'**0:36** · Number three. So I li¦ke this question.\n\n**1:08** · You haven’t been in mine. So benefit.\n';
-		assert.deepEqual(siblings(transcript, 3, 3), [
-			'You haven’t been in mine.',
-			'So benefit.',
-		]);
-		assert.deepEqual(siblings(transcript, 3, 2, -1), ['Number three.']);
+		assert.deepEqual(siblings(transcript, 3, 3), ['1:08', 'You haven’t been in mine.', 'So benefit.']);
+		assert.deepEqual(siblings(transcript, 3, 2, -1), ['Number three.', '0:36']);
 	});
 
 	it('moves by list items', () => {

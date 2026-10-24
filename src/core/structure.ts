@@ -110,6 +110,16 @@ export class Structure {
 				case 'list': {
 					const node = this.owner[block.firstLine]!;
 					add(lineUnit);
+					if (lineIndex === block.firstLine && block.lastLine > lineIndex) {
+						// The first line of an item with more lines, with its bullet, before the whole item.
+						const numbered = /\d/.test(this.text.charAt(node.markerFrom));
+						add({
+							kind: 'line',
+							label: numbered ? 'Line with number' : 'Line with bullet',
+							from: node.markerFrom,
+							to: line.contentTo,
+						});
+					}
 					add(content('list', 'List item text'));
 					add({ kind: 'list-item', label: 'List item', from: node.markerFrom, to: block.to });
 					break;

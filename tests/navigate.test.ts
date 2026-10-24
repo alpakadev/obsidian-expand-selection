@@ -39,6 +39,8 @@ describe('select next/previous unit of the same kind', () => {
 		assert.deepEqual(siblings(note, 2, 3, -1), ['Somewhere', 'Before just shows the Timestamp', '8:50']);
 		assert.deepEqual(siblings(note, 2, 2), ['12:30', 'i want to first select the sentence']);
 		assert.deepEqual(siblings(note, 3, 2, -1), ['Somewhere', 'Before just shows the Timestamp.']);
+		const lines = '- *8:50* Before just shows t¦he Timestamp\n*Somewhere* Before just shows the word\n';
+		assert.deepEqual(siblings(lines, 2, 2), ['Somewhere', 'Before just shows the word']);
 		const transcript =
 			'**0:36** · Number three. So I li¦ke this question.\n\n**1:08** · You haven’t been in mine. So benefit.\n';
 		assert.deepEqual(siblings(transcript, 3, 3), ['1:08', 'You haven’t been in mine.', 'So benefit.']);

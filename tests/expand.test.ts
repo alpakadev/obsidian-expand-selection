@@ -172,6 +172,32 @@ describe('expand selection: labels in front of a sentence', () => {
 		]);
 	});
 
+	it('ends a sentence without final punctuation at the end of its line', () => {
+		const note = '- *8:50* Before just shows the Timestamp\n*Somewhere* Before just shows the word\n';
+		assert.deepEqual(expansions(at(note, 'the Timestamp')), [
+			'the',
+			'Before just shows the Timestamp',
+			'*8:50* Before just shows the Timestamp',
+			'- *8:50* Before just shows the Timestamp',
+			note.trimEnd(),
+			note,
+		]);
+		assert.deepEqual(expansions(at(note, 'the word')).slice(1, 3), [
+			'Before just shows the word',
+			'*Somewhere* Before just shows the word',
+		]);
+		assert.deepEqual(expansions('First line without a stop\nSecond li¦ne here\n').slice(1, 3), [
+			'Second line here',
+			'First line without a stop\nSecond line here',
+		]);
+		// Text wrapped by hand goes on in lowercase on the next line and stays one sentence.
+		assert.deepEqual(expansions('A sentence that go¦es\non and on and ends here. Next.').slice(1, 4), [
+			'A sentence that goes',
+			'A sentence that goes\non and on and ends here',
+			'A sentence that goes\non and on and ends here.',
+		]);
+	});
+
 	it('selects the label itself, then its marks, then the line', () => {
 		assert.deepEqual(expansions(at(LABELS, 'Somewhere')).slice(0, 3), [
 			'Somewhere',

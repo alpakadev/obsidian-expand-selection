@@ -150,6 +150,16 @@ export function splitSentences(m: string, abbreviations: ReadonlySet<string>): R
 	let start = 0;
 	let i = 0;
 	while (i < n) {
+		if (m.charAt(i) === '\n') {
+			// Obsidian shows line breaks, so a line without final punctuation ends its sentence,
+			// unless the next line goes on in lowercase like text wrapped by hand.
+			if (!continuesInLowercase(m, i + 1) && hasText(m, start, i)) {
+				out.push({ from: start, to: i });
+				start = i;
+			}
+			i++;
+			continue;
+		}
 		if (!TERMINALS.has(m.charAt(i))) {
 			i++;
 			continue;
@@ -176,6 +186,17 @@ export function splitSentences(m: string, abbreviations: ReadonlySet<string>): R
 	}
 	if (start < n) out.push({ from: start, to: n });
 	return out;
+}
+
+function continuesInLowercase(m: string, from: number): boolean {
+	let i = from;
+	while (i < m.length && (m[i] === ' ' || m[i] === '\t')) i++;
+	return isLowercaseLetter(m[i]);
+}
+
+function hasText(m: string, from: number, to: number): boolean {
+	for (let i = from; i < to; i++) if (!isWhitespace(m[i])) return true;
+	return false;
 }
 
 function endsSentence(

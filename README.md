@@ -40,7 +40,7 @@ Links and embeds work the same way: in `![[Rising status invites strategic decep
 
 **Select same kind: next** moves the selection along and keeps both the kind and the size you chose:
 
-- a word → the next word; a sentence → the next sentence, also into the next bullet; a list item → the next list item;
+- a word → the next word; a sentence → the next sentence, also into the next bullet, stopping at labels like `8:50` in `*8:50* Text`; a list item → the next list item;
 - bold text or text in quotes **without** its marks → the next bold, italic, quoted or bracketed text, again without marks. `Moral intellectualizing often masks shame.` → `Investigating family narratives reveals inherited life scripts.` → `patterns across generations`;
 - the same **with** its marks → the next one with its marks: `**Moral …**` → `**Investigating …**` → `"patterns across generations"`.
 
@@ -111,9 +111,10 @@ From small to large — steps that would select the same text are skipped:
 - **Compound word**: hyphenated words, file names, URLs (`well-known`, `example.com/path`), and **tags** with `#`.
 - **Link parts**: the target or the shown text of `[[target|text]]`, the URL of `[text](url)`.
 - **Text inside a pair**, then **the pair with its marks**: quotes `“…” „…“ »…« «…» ‘…’ "…" '…'`, brackets `(…) […] {…}`, formatting `**…** *…* __…__ _…_ ~~…~~ ==…== %%…%%`, `` `code` ``, `$math$`, `[[links]]`, then `![[embeds]]` with their `!`; Markdown links `[text](url)` and images `![text](url)`.
-- **Part of a sentence** between commas, semicolons, colons or dashes.
+- **Part of a sentence** between commas, semicolons, colons, dashes or dots like `·` and `•`.
 - **Sentence without final punctuation**, then the **sentence**. Abbreviations like `e.g.`, `z.B.` or initials like `J. R. R.` don't end a sentence. Formatting that wraps the sentence is left out until the next step. A sentence that is all bold counts as bold text, so “next” goes to the next bold text.
-- **Line** of a paragraph that has line breaks, or of a code block.
+- A **label** in front of a sentence is a piece of its own: formatting or brackets at the start with more text after them, like `*8:50*`, `**12:30**`, `**Note:**`, `==Key idea==` or `[0:36]`. Only the marks count, not what is inside them. So in `*Somewhere* Before just shows the word.` the sentence is `Before just shows the word.`; the label comes with the line or paragraph. A divider after the label (`·`, `•`, `-`, `–`, `—`, `:`) belongs to neither. Marks that go on without a space (`**Bold**, then …`), quotes, `code` and links stay part of the sentence.
+- **Line** of a paragraph that has line breaks, or of a code block. The first line of a list item with more lines comes without and then with its bullet or number. A code block without a language, or with `text`, `txt`, `plain`, `md` or `markdown`, is read as text — Obsidian shows it as plain text — so its lines have sentences and parts of sentences, without the bullet or checkbox at the start.
 - **Paragraph**, **list item text** (without bullet, number or checkbox), **heading text**, **table cell**, **table row**.
 - **List item** with its bullet, then the item **with its sub-items**, the **nested list**, the parent item, … the whole **list**.
 - **Code** inside a code block, then the code block with its fences. The same for the note's properties (front matter).

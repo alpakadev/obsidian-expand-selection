@@ -62,6 +62,29 @@ describe('picker rows', () => {
 		assert.equal(r.marks[5], '');
 	});
 
+	it('pairs the first line of a longer list item with its bullet', () => {
+		const topNote = '- *8:50* Before just shows t¦he Timestamp.\n*Somewhere* Before just shows the word.\n';
+		const nestedNote = '- Item\n  - *8:50* Nested li¦ne\n  continued\n';
+		const top = rows(topNote);
+		assert.deepEqual(top.labels, ['Word', 'Sentence', 'Line', 'List item', 'Whole note']);
+		assert.deepEqual([top.tight[2], top.wide[2]], [
+			'*8:50* Before just shows the Timestamp.',
+			'- *8:50* Before just shows the Timestamp.',
+		]);
+		assert.equal(top.tight[3], '*8:50* Before just shows the Timestamp.\n*Somewhere* Before just shows the word.');
+		const nested = rows(nestedNote);
+		assert.deepEqual(nested.labels, ['Word', 'Line with bullet', 'Line', 'List item', 'List item with sub-items', 'Whole note']);
+		assert.deepEqual([nested.tight[1], nested.wide[1]], ['*8:50* Nested line', '- *8:50* Nested line']);
+		for (const [r, note] of [[top, topNote], [nested, nestedNote]] as const) {
+			let current: Range = parse(note).selection;
+			for (let unit = expandSelection(r.analysis, current); unit; unit = expandSelection(r.analysis, current)) {
+				const step = unit;
+				assert.ok(r.rows.some((row) => sameRange(row.tight, step) || sameRange(row.wide, step)), r.text.slice(step.from, step.to));
+				current = unit;
+			}
+		}
+	});
+
 	it('folds headings and quoted lines into Line', () => {
 		const heading = rows('## To¦pic\n\nBody.\n');
 		assert.deepEqual(heading.labels, ['Word', 'Line', 'Section (##)', 'Whole note']);

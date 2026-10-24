@@ -87,12 +87,13 @@ export class Structure {
 		};
 		const block = this.blockAt(lineIndex);
 		if (block) {
+			const code = block.type === 'code';
 			const lineUnit: Unit = {
 				kind: 'line',
-				label: block.type === 'code' ? 'Line of code' : 'Line',
-				from: lineIndex === block.firstLine ? block.from : line.textFrom,
+				label: code && !line.plainText ? 'Line of code' : 'Line',
+				from: lineIndex === block.firstLine && !code ? block.from : line.textFrom,
 				to: line.contentTo,
-				navOnly: block.type !== 'code' && block.firstLine === block.lastLine,
+				navOnly: !code && block.firstLine === block.lastLine,
 			};
 			const content = (key: string, label: string): Unit => ({
 				kind: 'block-content',
@@ -109,6 +110,16 @@ export class Structure {
 				case 'list': {
 					const node = this.owner[block.firstLine]!;
 					add(lineUnit);
+					if (lineIndex === block.firstLine && block.lastLine > lineIndex) {
+						// The first line of an item with more lines, with its bullet, before the whole item.
+						const numbered = /\d/.test(this.text.charAt(node.markerFrom));
+						add({
+							kind: 'line',
+							label: numbered ? 'Line with number' : 'Line with bullet',
+							from: node.markerFrom,
+							to: line.contentTo,
+						});
+					}
 					add(content('list', 'List item text'));
 					add({ kind: 'list-item', label: 'List item', from: node.markerFrom, to: block.to });
 					break;

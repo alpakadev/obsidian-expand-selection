@@ -23,6 +23,11 @@ const TAG = /(^|[\s([{"'“‘„«»])(#[\p{L}\p{N}\p{M}_/-]*[\p{L}_/-][\p{L}\p
 /** Pairs whose delimiters are dropped when they wrap a whole sentence. */
 const UNWRAPPABLE: ReadonlySet<PairFamily> = new Set(['quote', 'bracket', 'emphasis', 'comment']);
 
+/** Formatting and brackets that label the text after them: `*8:50* Text`, `**Note:** Text`, `[0:36] Text`. */
+const LABEL_FAMILIES: ReadonlySet<PairFamily> = new Set(['emphasis', 'bracket']);
+/** Marks between a label and the text after it, like `·` in `**0:36** · Text`. */
+const DIVIDERS: ReadonlySet<string> = new Set(['·', '•', '-', '–', '—', ':']);
+
 /**
  * Finds all inline units of a text block.
  * @param text the block text, with line prefixes of continuation lines replaced by spaces
@@ -76,14 +81,15 @@ export function analyzeInline(
 	} else if (mode === 'prose') {
 		const m = scan.masked;
 		const index = new PairIndex(scan.pairs);
-		for (const segment of splitSentences(m, options.abbreviations)) {
-			const sentence = stripDelimiters(m, index, segment);
+		const pieces = splitSentences(m, options.abbreviations).flatMap((segment) => splitLabels(m, index, segment));
+		for (const { label, ...piece } of pieces) {
+			const sentence = stripDelimiters(m, index, piece);
 			if (sentence.from >= sentence.to) continue;
-			add({ kind: 'sentence', label: 'Sentence' }, sentence);
+			add({ kind: 'sentence', label: label ? 'Label' : 'Sentence' }, sentence);
 			const bare = stripTerminal(m, sentence);
 			if (bare.from < bare.to) {
 				const navOnly = bare.to === sentence.to;
-				add({ kind: 'sentence-bare', label: 'Sentence without final punctuation', navOnly }, bare);
+				add({ kind: 'sentence-bare', label: label ? 'Label' : 'Sentence without final punctuation', navOnly }, bare);
 			}
 			const parts = clauses(m, index, sentence);
 			for (const part of parts) {
@@ -254,6 +260,45 @@ function runStart(m: string, end: number): number {
 	return start;
 }
 
+/**
+ * Splits labels off the start of a sentence: formatting or brackets with more text after them,
+ * like `*8:50*` in `*8:50* Text`, `**Note:**` or `[0:36]`. Only the marks count, not what is
+ * inside them. Each label is a piece of its own, so the sentence starts after it and next/previous
+ * stops at it. A divider after a label, like `·` in `**0:36** · Text`, belongs to neither.
+ */
+function splitLabels(m: string, index: PairIndex, segment: Range): (Range & { label: boolean })[] {
+	const pieces: (Range & { label: boolean })[] = [];
+	let from = segment.from;
+	for (let guard = 0; guard < 8; guard++) {
+		while (from < segment.to && isWhitespace(m[from])) from++;
+		const label = labelAt(m, index, from, segment.to);
+		if (!label || !hasWord(m, label.next, segment.to)) break;
+		pieces.push({ from, to: label.to, label: true });
+		from = label.next;
+	}
+	pieces.push({ from, to: segment.to, label: false });
+	return pieces;
+}
+
+/** The label starting at `from` and where the text after it starts, or null when there is none. */
+function labelAt(m: string, index: PairIndex, from: number, to: number): { to: number; next: number } | null {
+	let end = -1;
+	for (const pair of index.openingAt(from)) {
+		if (pair.from === from && pair.to <= to && LABEL_FAMILIES.has(pair.family)) end = Math.max(end, pair.to);
+	}
+	if (end < 0) return null;
+	let next = end;
+	while (next < to && isWhitespace(m[next])) next++;
+	if (DIVIDERS.has(m.charAt(next)) && isWhitespace(m[next + 1])) return { to: end, next: next + 1 };
+	// `**Bold**, more` or `**Bold**'s` go on without a space: the marks are part of the sentence.
+	return next > end ? { to: end, next } : null;
+}
+
+function hasWord(m: string, from: number, to: number): boolean {
+	for (let i = from; i < to; i++) if (isWordChar(m[i])) return true;
+	return false;
+}
+
 function stripTerminal(m: string, range: Range): Range {
 	let to = range.to;
 	while (to > range.from && TERMINALS.has(m.charAt(to - 1))) to--;
@@ -261,7 +306,7 @@ function stripTerminal(m: string, range: Range): Range {
 	return { from: range.from, to };
 }
 
-/** Splits a sentence at commas, semicolons, colons and dashes that are not inside quotes or brackets. */
+/** Splits a sentence at commas, semicolons, colons, dashes and dots like `·` that are not inside quotes or brackets. */
 function clauses(m: string, index: PairIndex, sentence: Range): Range[] {
 	const inside = index.pairs.filter((p) => p.from >= sentence.from && p.to <= sentence.to);
 	const cuts: number[] = [];
@@ -272,7 +317,7 @@ function clauses(m: string, index: PairIndex, sentence: Range): Range[] {
 			separator = q + 1 >= sentence.to || isWhitespace(m[q + 1]);
 		} else if (c === '—') {
 			separator = true;
-		} else if (c === '–' || c === '-') {
+		} else if (c === '–' || c === '-' || c === '·' || c === '•') {
 			separator = isWhitespace(m[q - 1]) && isWhitespace(m[q + 1]);
 		}
 		if (separator && !inside.some((p) => p.openTo <= q && q < p.closeFrom)) cuts.push(q);

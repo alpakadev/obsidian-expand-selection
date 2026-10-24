@@ -27,7 +27,7 @@ export class Analysis {
 		let units = this.inlineCache.get(block.index);
 		if (!units) {
 			let mode: InlineMode = 'prose';
-			if (block.type === 'code') mode = 'code';
+			if (block.type === 'code' && !this.structure.lines[block.firstLine]!.plainText) mode = 'code';
 			else if (block.type === 'table') mode = 'table';
 			units = analyzeInline(this.structure.blockText(block), block.from, mode, this.options);
 			this.inlineCache.set(block.index, units);

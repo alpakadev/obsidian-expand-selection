@@ -31,6 +31,8 @@ export interface Line {
 	fenceOpen: number;
 	/** True for the YAML front matter at the top of a note. */
 	frontmatter: boolean;
+	/** For `code` lines in a code block without a language or with a text one like `md`: read as text. */
+	plainText: boolean;
 }
 
 const QUOTE = /^[ \t]{0,3}>[ \t]?/;
@@ -38,10 +40,12 @@ const HEADING = /^(#{1,6})(?:[ \t]+|$)/;
 const RULE = /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 const LIST = /^(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[^\]\n]\](?:[ \t]+|$))?|$)/;
 const FENCE = /^(`{3,}|~{3,})/;
+/** Code block languages whose lines are text, not code. Obsidian shows a block without a language as plain text. */
+const TEXT_LANGUAGES: ReadonlySet<string> = new Set(['', 'text', 'txt', 'plain', 'plaintext', 'md', 'markdown']);
 
 export function parseLines(text: string): Line[] {
 	const lines: Line[] = [];
-	let fence: { char: string; length: number; open: number; frontmatter: boolean } | null = null;
+	let fence: { char: string; length: number; open: number; frontmatter: boolean; text: boolean } | null = null;
 	let from = 0;
 	for (let index = 0; ; index++) {
 		const end = text.indexOf('\n', from);
@@ -53,7 +57,7 @@ export function parseLines(text: string): Line[] {
 			line.kind = 'fence';
 			line.frontmatter = true;
 			line.fenceOpen = 0;
-			fence = { char: '-', length: 3, open: 0, frontmatter: true };
+			fence = { char: '-', length: 3, open: 0, frontmatter: true, text: false };
 		} else if (fence) {
 			const rest = raw.slice(line.textFrom - from);
 			const closes = fence.frontmatter
@@ -63,7 +67,9 @@ export function parseLines(text: string): Line[] {
 			line.kind = closes ? 'fence' : 'code';
 			line.fenceOpen = fence.open;
 			line.frontmatter = fence.frontmatter;
-			line.contentFrom = line.textFrom;
+			line.plainText = fence.text && !closes;
+			// Text lines keep their content start after a bullet, checkbox or heading marks.
+			if (!line.plainText) line.contentFrom = line.textFrom;
 			line.headingLevel = 0;
 			if (closes) fence = null;
 		} else {
@@ -73,7 +79,14 @@ export function parseLines(text: string): Line[] {
 				line.kind = 'fence';
 				line.fenceOpen = index;
 				line.contentFrom = line.textFrom;
-				fence = { char: opening[1]!.charAt(0), length: opening[1]!.length, open: index, frontmatter: false };
+				const language = rest.slice(opening[1]!.length).trim().split(/\s/)[0]!.toLowerCase();
+				fence = {
+					char: opening[1]!.charAt(0),
+					length: opening[1]!.length,
+					open: index,
+					frontmatter: false,
+					text: TEXT_LANGUAGES.has(language),
+				};
 			}
 		}
 		lines.push(line);
@@ -115,6 +128,7 @@ function parseLine(raw: string, from: number, index: number): Line {
 		headingLevel: 0,
 		fenceOpen: -1,
 		frontmatter: false,
+		plainText: false,
 	};
 	if (rest.trim() === '') {
 		line.kind = 'blank';

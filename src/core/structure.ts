@@ -87,12 +87,13 @@ export class Structure {
 		};
 		const block = this.blockAt(lineIndex);
 		if (block) {
+			const code = block.type === 'code';
 			const lineUnit: Unit = {
 				kind: 'line',
-				label: block.type === 'code' ? 'Line of code' : 'Line',
-				from: lineIndex === block.firstLine ? block.from : line.textFrom,
+				label: code && !line.plainText ? 'Line of code' : 'Line',
+				from: lineIndex === block.firstLine && !code ? block.from : line.textFrom,
 				to: line.contentTo,
-				navOnly: block.type !== 'code' && block.firstLine === block.lastLine,
+				navOnly: !code && block.firstLine === block.lastLine,
 			};
 			const content = (key: string, label: string): Unit => ({
 				kind: 'block-content',

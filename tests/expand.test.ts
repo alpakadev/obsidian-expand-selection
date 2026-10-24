@@ -137,6 +137,81 @@ describe('expand selection: quotes and brackets', () => {
 	});
 });
 
+describe('expand selection: labels in front of a sentence', () => {
+	it('leaves a timestamp in formatting out of the sentence', () => {
+		assert.deepEqual(expansions('- *8:50* Expands in¦to the stars.\n'), [
+			'into',
+			'Expands into the stars',
+			'Expands into the stars.',
+			'*8:50* Expands into the stars.',
+			'- *8:50* Expands into the stars.',
+			'- *8:50* Expands into the stars.\n',
+		]);
+		assert.deepEqual(expansions('*9:50* Before just sho¦ws the Timestamp ').slice(1, 3), [
+			'Before just shows the Timestamp',
+			'*9:50* Before just shows the Timestamp',
+		]);
+		assert.equal(expansions('`1:08:22` Then it sta¦rts.')[2], 'Then it starts.');
+		assert.equal(expansions('[0:36] Then it sta¦rts.')[2], 'Then it starts.');
+	});
+
+	it('stops at the part before a dash, then the sentence, before the label', () => {
+		assert.deepEqual(expansions('**12:30** i want to first se¦lect the sentence - not this part yet'), [
+			'select',
+			'i want to first select the sentence',
+			'i want to first select the sentence - not this part yet',
+			'**12:30** i want to first select the sentence - not this part yet',
+		]);
+	});
+
+	it('leaves out formatting that ends with a colon or is followed by a divider', () => {
+		assert.deepEqual(expansions('**Even if there are words here:** Something impor¦tant after the thing.'), [
+			'important',
+			'Something important after the thing',
+			'Something important after the thing.',
+			'**Even if there are words here:** Something important after the thing.',
+		]);
+		assert.equal(expansions('**Note**: read th¦is first.')[2], 'read this first.');
+		assert.equal(expansions('**Speaker A** – Hello th¦ere.')[2], 'Hello there.');
+		assert.equal(expansions('0:36 · Hello th¦ere.')[2], 'Hello there.');
+	});
+
+	it('handles transcript paragraphs with a timestamp and a middle dot', () => {
+		const note =
+			'**0:36** · Number three, worldly perspec¦tive as young professionals. So I like this question.\n\n**1:08** · You haven’t been in mine.\n';
+		assert.deepEqual(expansions(note).slice(0, 5), [
+			'perspective',
+			'worldly perspective as young professionals',
+			'Number three, worldly perspective as young professionals',
+			'Number three, worldly perspective as young professionals.',
+			'**0:36** · Number three, worldly perspective as young professionals. So I like this question.',
+		]);
+		assert.deepEqual(expansions('**0:36** ¦· Number three.').slice(0, 1), [
+			'**0:36** · Number three.',
+		]);
+		assert.deepEqual(expansions('Red apples · ripe pe¦ars · plums.').slice(0, 3), [
+			'pears',
+			'ripe pears',
+			'Red apples · ripe pears · plums',
+		]);
+	});
+
+	it('keeps emphasis that is part of the sentence', () => {
+		assert.equal(expansions('**Never** do th¦is again.')[2], '**Never** do this again.');
+		assert.equal(expansions('*Bold claim* follows he¦re.')[2], '*Bold claim* follows here.');
+		assert.deepEqual(expansions('**8:¦50**'), ['50', '8:50', '**8:50**']);
+	});
+
+	it('selects the label itself, then the whole paragraph', () => {
+		assert.deepEqual(expansions('**Not¦e:** Something important. More.'), [
+			'Note',
+			'Note:',
+			'**Note:**',
+			'**Note:** Something important. More.',
+		]);
+	});
+});
+
 describe('expand selection: links and embeds', () => {
 	it('selects a wiki link, then its brackets, then the ! of an embed', () => {
 		assert.deepEqual(expansions('- ![[Rising sta¦tus invites strategic deception]]\n'), [
@@ -269,6 +344,30 @@ describe('expand selection: blocks', () => {
 			'const x = foo(bar, 2);\nreturn x;',
 			'```js\nconst x = foo(bar, 2);\nreturn x;\n```',
 			'Text\n\n```js\nconst x = foo(bar, 2);\nreturn x;\n```\n',
+		]);
+	});
+
+	it('reads code blocks without a language or with a text language as text', () => {
+		assert.deepEqual(expansions('```\n- [ ] The whole line is dir¦ectly selected, or not.\n```\n'), [
+			'directly',
+			'The whole line is directly selected',
+			'The whole line is directly selected, or not',
+			'The whole line is directly selected, or not.',
+			'- [ ] The whole line is directly selected, or not.',
+			'```\n- [ ] The whole line is directly selected, or not.\n```',
+			'```\n- [ ] The whole line is directly selected, or not.\n```\n',
+		]);
+		assert.deepEqual(expansionLabels('```md\n## A he¦ading. Two.\n```').slice(0, 4), [
+			'Word',
+			'Sentence without final punctuation',
+			'Sentence',
+			'Line',
+		]);
+		assert.deepEqual(expansions('```python\nprint(a, b¦)  # done. Next\n```').slice(0, 4), [
+			'b',
+			'a, b',
+			'(a, b)',
+			'print(a, b)  # done. Next',
 		]);
 	});
 

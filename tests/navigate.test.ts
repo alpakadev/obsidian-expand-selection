@@ -33,6 +33,16 @@ describe('select next/previous unit of the same kind', () => {
 		]);
 	});
 
+	it('moves by sentences in a transcript without the timestamps', () => {
+		const transcript =
+			'**0:36** · Number three. So I li¦ke this question.\n\n**1:08** · You haven’t been in mine. So benefit.\n';
+		assert.deepEqual(siblings(transcript, 3, 3), [
+			'You haven’t been in mine.',
+			'So benefit.',
+		]);
+		assert.deepEqual(siblings(transcript, 3, 2, -1), ['Number three.']);
+	});
+
 	it('moves by list items', () => {
 		assert.deepEqual(siblings(cursorIn('intuition'), 6, 2), [
 			'- **Intuition operates faster than rational analysis.** Gut reactions signal interpersonal alignment or danger far quicker than conscious thought can assemble proof.',

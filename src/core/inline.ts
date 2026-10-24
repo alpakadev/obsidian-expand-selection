@@ -23,6 +23,13 @@ const TAG = /(^|[\s([{"'“‘„«»])(#[\p{L}\p{N}\p{M}_/-]*[\p{L}_/-][\p{L}\p
 /** Pairs whose delimiters are dropped when they wrap a whole sentence. */
 const UNWRAPPABLE: ReadonlySet<PairFamily> = new Set(['quote', 'bracket', 'emphasis', 'comment']);
 
+/** Pairs that can label the text after them, like `**0:36**`, `*Note:*`, `` `8:50` `` or `[Speaker]:`. */
+const LABEL_FAMILIES: ReadonlySet<PairFamily> = new Set(['emphasis', 'code', 'bracket']);
+/** Marks that separate a label from the text after it: `**0:36** · Text`, `**Note** - Text`. */
+const DIVIDERS: ReadonlySet<string> = new Set(['·', '•', '-', '–', '—', ':']);
+const TIMESTAMP = /^\d{1,2}(?::\d{2}){1,2}(?:[.,]\d+)?$/;
+const BARE_TIMESTAMP = /\d{1,2}(?::\d{2}){1,2}(?:[.,]\d+)?(?=\s)/y;
+
 /**
  * Finds all inline units of a text block.
  * @param text the block text, with line prefixes of continuation lines replaced by spaces
@@ -77,7 +84,7 @@ export function analyzeInline(
 		const m = scan.masked;
 		const index = new PairIndex(scan.pairs);
 		for (const segment of splitSentences(m, options.abbreviations)) {
-			const sentence = stripDelimiters(m, index, segment);
+			const sentence = stripDelimiters(m, index, skipLabels(text, m, index, segment));
 			if (sentence.from >= sentence.to) continue;
 			add({ kind: 'sentence', label: 'Sentence' }, sentence);
 			const bare = stripTerminal(m, sentence);
@@ -254,6 +261,48 @@ function runStart(m: string, end: number): number {
 	return start;
 }
 
+/**
+ * Moves the start of a sentence past labels in front of it, which are not part of the sentence:
+ * a timestamp in formatting or brackets (`**0:36**`, `*8:50*`, `[1:08]`), formatting that ends
+ * with a colon (`**Note:**`), and formatting or a timestamp followed by a divider (`**Note** - `, `0:36 · `).
+ */
+function skipLabels(text: string, m: string, index: PairIndex, range: Range): Range {
+	let from = range.from;
+	for (let guard = 0; guard < 8; guard++) {
+		while (from < range.to && isWhitespace(m[from])) from++;
+		const end = labelEnd(text, m, index, from, range.to);
+		if (end < 0 || !hasWord(m, end, range.to)) break;
+		from = end;
+	}
+	return { from, to: range.to };
+}
+
+/** The end of the label starting at `from`, including its divider, or -1 when there is none. */
+function labelEnd(text: string, m: string, index: PairIndex, from: number, to: number): number {
+	let end = -1;
+	let label = false;
+	for (const pair of index.openingAt(from)) {
+		if (pair.from !== from || pair.to > to || !LABEL_FAMILIES.has(pair.family)) continue;
+		const inner = text.slice(pair.openTo, pair.closeFrom).trim();
+		label ||= TIMESTAMP.test(inner) || inner.endsWith(':');
+		end = Math.max(end, pair.to);
+	}
+	if (end < 0) {
+		BARE_TIMESTAMP.lastIndex = from;
+		if (!BARE_TIMESTAMP.test(m)) return -1;
+		end = BARE_TIMESTAMP.lastIndex;
+	}
+	let divider = end;
+	while (divider < to && (m[divider] === ' ' || m[divider] === '\t')) divider++;
+	if (DIVIDERS.has(m.charAt(divider)) && isWhitespace(m[divider + 1])) return divider + 1;
+	return label ? end : -1;
+}
+
+function hasWord(m: string, from: number, to: number): boolean {
+	for (let i = from; i < to; i++) if (isWordChar(m[i])) return true;
+	return false;
+}
+
 function stripTerminal(m: string, range: Range): Range {
 	let to = range.to;
 	while (to > range.from && TERMINALS.has(m.charAt(to - 1))) to--;
@@ -261,7 +310,7 @@ function stripTerminal(m: string, range: Range): Range {
 	return { from: range.from, to };
 }
 
-/** Splits a sentence at commas, semicolons, colons and dashes that are not inside quotes or brackets. */
+/** Splits a sentence at commas, semicolons, colons, dashes and dots like `·` that are not inside quotes or brackets. */
 function clauses(m: string, index: PairIndex, sentence: Range): Range[] {
 	const inside = index.pairs.filter((p) => p.from >= sentence.from && p.to <= sentence.to);
 	const cuts: number[] = [];
@@ -272,7 +321,7 @@ function clauses(m: string, index: PairIndex, sentence: Range): Range[] {
 			separator = q + 1 >= sentence.to || isWhitespace(m[q + 1]);
 		} else if (c === '—') {
 			separator = true;
-		} else if (c === '–' || c === '-') {
+		} else if (c === '–' || c === '-' || c === '·' || c === '•') {
 			separator = isWhitespace(m[q - 1]) && isWhitespace(m[q + 1]);
 		}
 		if (separator && !inside.some((p) => p.openTo <= q && q < p.closeFrom)) cuts.push(q);
